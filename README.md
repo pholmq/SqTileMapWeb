@@ -2,7 +2,7 @@
 
 A browser prototype based on the room-emulation architecture used by Simon Owen's TileMap. It uses the original Z80 CPU core compiled to WebAssembly, creates 512 independent Spectrum room states from the same 48K SNA snapshot, and renders their Spectrum screens into a single 16 × 32 world map.
 
-> **Important:** No Starquake game snapshot or Spectrum ROM is bundled. You must supply both files locally in the browser: a compatible uncompressed 48K `.sna` snapshot (49,179 bytes) and a legally obtained 16 KB Spectrum 48K ROM. These copyrighted files are deliberately excluded from this public source project.
+> **Bundled game files:** The project includes `public/starquake.sna` (an uncompressed 48K snapshot, 49,179 bytes) and `public/48.rom` (a 16 KB Spectrum 48K ROM). The app loads both automatically at startup. These files remain subject to their original rights and are not covered by this project's GPL licence.
 
 ## Current implementation
 
@@ -30,9 +30,8 @@ npm run dev
 Open the Vite URL shown in the terminal. Vite is configured with the cross-origin isolation headers needed for `SharedArrayBuffer` and parallel WebAssembly workers.
 
 1. Wait for the Z80 workers to load.
-2. Click **SNAPSHOT** and select your compatible uncompressed Starquake 48K `.sna` file (49,179 bytes).
-3. Click **ROM** and select your legally obtained 16 KB Spectrum 48K ROM.
-4. Click **Play**.
+2. The bundled snapshot and ROM are fetched automatically and used to initialise all 512 room states.
+3. Click **Play**. The ROM and SNAPSHOT controls remain available if you want to load alternative files.
 
 The browser uses a shared-memory worker pool when `crossOriginIsolated` is available. Each worker advances a disjoint range of rooms, while atomic room locks protect room-state copies during room transitions. Only rooms intersecting the current viewport are advanced, plus the active room. The default background update rate is 10 Hz while the active room is advanced every frame; you can select 25 Hz or full 50 Hz updates for all visible rooms in the toolbar. This is a deliberate browser-performance option: TileMap advances all visible rooms each frame, while a full 512-room browser simulation can be CPU-intensive. If the host does not provide cross-origin isolation, the app falls back to one worker.
 
@@ -105,11 +104,10 @@ scripts/
 
 ## Validation status and known limitations
 
-The development snapshot used to build and validate the hook table was checked against all nine Starquake hook opcodes used by TileMap. The snapshot itself is not distributed in this repository. The WebAssembly bridge initialises all 512 room states in a local smoke test and reports the expected initial room (8). The shared-memory module was also instantiated in multiple workers against the same memory, and disjoint room ranges were executed concurrently in a smoke test. The project has **not yet been verified through a real game boot or room transition**, because a legally obtained Spectrum ROM was not available for a full boot test. Upload the correct 48K ROM and run the game to verify the hook hand-off in-browser.
+The bundled snapshot was checked against all nine Starquake hook opcodes used by TileMap. The WebAssembly bridge initialises all 512 room states in a local smoke test and reports the expected initial room (8). The shared-memory module was also instantiated in multiple workers against the same memory, and disjoint room ranges were executed concurrently in a smoke test. The project has **not yet been verified through a real game boot or room transition**; test it in-browser and verify the hook hand-off during gameplay.
 
 The current bridge intentionally mirrors the TileMap CPU/memory and room-transfer model, but it is still a prototype. In particular:
 
-- No Starquake SNA snapshot or Spectrum ROM is included; provide both locally.
 - The SNA loader supports the uncompressed 48K `.sna` format used by the supplied file; compressed `.z80`/`.szx` snapshots are not supported.
 - Beeper audio is approximate and does not yet include full timing-accurate sound synthesis.
 - The map renderer uses the standard Spectrum palette; enhanced art replacement is a later layer.
@@ -117,4 +115,4 @@ The current bridge intentionally mirrors the TileMap CPU/memory and room-transfe
 
 ## Licence
 
-GPL-3.0. See `COPYING.txt` and `ATTRIBUTION.md`. The Starquake game snapshot is separately copyrighted material and is not relicensed by this repository.
+GPL-3.0. See `COPYING.txt` and `ATTRIBUTION.md`. The Starquake game snapshot and Spectrum ROM are separately copyrighted material and are not relicensed by this repository.

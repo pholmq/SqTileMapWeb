@@ -226,6 +226,39 @@ export default function App() {
   }, [handleWorkerMessage]);
 
   useEffect(() => {
+    if (!poolReady) return;
+    let cancelled = false;
+    const loadBundledAssets = async () => {
+      try {
+        setStatus('Loading bundled Starquake snapshot and Spectrum ROM…');
+        const base = import.meta.env.BASE_URL;
+        const [snapshotResponse, romResponse] = await Promise.all([
+          fetch(`${base}starquake.sna`),
+          fetch(`${base}48.rom`),
+        ]);
+        if (!snapshotResponse.ok) throw new Error(`Could not load bundled snapshot (${snapshotResponse.status}).`);
+        if (!romResponse.ok) throw new Error(`Could not load bundled Spectrum ROM (${romResponse.status}).`);
+        const [snapshot, rom] = await Promise.all([snapshotResponse.arrayBuffer(), romResponse.arrayBuffer()]);
+        if (snapshot.byteLength !== 49179) throw new Error(`Bundled snapshot must be 49,179 bytes; got ${snapshot.byteLength}.`);
+        if (rom.byteLength < 16384) throw new Error(`Bundled Spectrum ROM must contain at least 16,384 bytes; got ${rom.byteLength}.`);
+        if (cancelled) return;
+        snapshotRef.current = snapshot;
+        setSnapshotName('starquake.sna');
+        setRomName('48.rom');
+        setStatus('Initialising all 512 room states…');
+        workersRef.current[0].postMessage({ type: 'init', snapshot, rom, cheats: false }, [snapshot, rom]);
+      } catch (cause) {
+        if (!cancelled) {
+          setError(cause instanceof Error ? cause.message : String(cause));
+          setStatus('Could not load bundled game files');
+        }
+      }
+    };
+    loadBundledAssets();
+    return () => { cancelled = true; };
+  }, [poolReady]);
+
+  useEffect(() => {
     const canvas = mapCanvasRef.current;
     const overlay = overlayRef.current;
     if (canvas && overlay) {
@@ -319,7 +352,7 @@ export default function App() {
     const buffer = await file.arrayBuffer();
     if (buffer.byteLength !== 49179) { setError(`Expected an uncompressed 48K .sna snapshot of 49,179 bytes; got ${buffer.byteLength}.`); return; }
     snapshotRef.current = buffer; setSnapshotName(file.name); setError('');
-    setReady(false); playingRef.current = false; setPlaying(false); setStatus('Snapshot selected. Upload a compatible Spectrum ROM to initialise.');
+    setReady(false); playingRef.current = false; setPlaying(false); setStatus('Snapshot selected. Select a compatible Spectrum ROM to initialise.');
   };
   const togglePlay = () => {
     if (!ready) return;
@@ -358,7 +391,7 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>Upload a compatible Starquake 48K snapshot and a 16 KB Spectrum 48K ROM to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
+          {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>The bundled Starquake snapshot and Spectrum ROM are loaded automatically to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
@@ -369,7 +402,7 @@ export default function App() {
         </aside>
       </section>
       {error && <div className="error-banner"><strong>Emulator:</strong> {error}<button onClick={() => setError('')}>Dismiss</button></div>}
-      <footer className="footer"><span>STARQUAKE · 1985 · BUBBLE BUS SOFTWARE</span><span>Local snapshot supplied by user · upload a compatible Spectrum ROM</span></footer>
+      <footer className="footer"><span>STARQUAKE · 1985 · BUBBLE BUS SOFTWARE</span><span>Bundled Starquake snapshot · bundled Spectrum 48K ROM</span></footer>
     </main>
   );
 }
