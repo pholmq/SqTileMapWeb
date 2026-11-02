@@ -14,7 +14,7 @@ A browser prototype based on the room-emulation architecture used by Simon Owen'
 - TileMap's inactive-room hooks are implemented: inactive sprite/attribute drawing is skipped, inactive BLOB falling is stopped, and inactive hazard handling is bypassed.
 - A single map canvas displays the 512 room screens; the visible room area is cropped to the 144-pixel playfield below Starquake's 48-pixel status panel.
 - Map camera supports continuous zoom, pointer-centred wheel zoom, drag pan, full-map fit, and focus on the active room.
-- Spectrum keyboard matrix input for Starquake: Q/A/O/P/Space.
+- Spectrum keyboard matrix input for Starquake: Q/A/O/P/M (M is Fire; Space is pause).
 - Browser beeper output is a basic Web Audio approximation; it is not yet a cycle-accurate AY/48K audio implementation.
 - Optional TileMap cheat pokes.
 
@@ -94,7 +94,8 @@ scripts/
 | A | Down / create platform |
 | O | Left |
 | P | Right |
-| Space | Fire |
+| M | Fire |
+| Space | Pause / resume |
 | Mouse wheel | Zoom around pointer |
 | Drag | Pan map |
 | Home | Focus active room |
