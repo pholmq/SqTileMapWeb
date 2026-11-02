@@ -19,6 +19,8 @@ typedef struct {
   int dirty;
   int frame_cycles;
   int visited;
+  int transitioned;
+  size_t run_budget;
   volatile int lock;
 } Room;
 
@@ -29,6 +31,9 @@ static int initialized = 0;
 static int hook_error = 0;
 static int cheat_mode = 0;
 static int game_over = 0;
+static volatile int active_frame_number = 0;
+static volatile int transition_frame = -1;
+static volatile int transition_room = -1;
 static uint8_t *snapshot_mem;
 static uint8_t base_mem[65536];
 static ZZ80State snapshot_cpu;
@@ -170,8 +175,11 @@ static void on_hook(void *ctx, uint16_t address) {
       if(is_active(r) && new_room<ROOM_COUNT && new_room!=r->room) {
         Room *next=&rooms[new_room];
         r->visited=1;
-        /* Seed a room only on its first visit; revisits keep their own CPU and RAM. */
+        /* Transfer the live CPU/RAM state, then pause this source CPU for the frame. */
         clone_room_for_entry(r,next,new_room);
+        r->transitioned=1;
+        __atomic_store_n(&transition_room,(int)new_room,__ATOMIC_SEQ_CST);
+        __atomic_store_n(&transition_frame,__atomic_load_n(&active_frame_number,__ATOMIC_SEQ_CST),__ATOMIC_SEQ_CST);
         __atomic_store_n(&current_room,new_room,__ATOMIC_SEQ_CST);
       }
       r->drawing=0;
@@ -203,13 +211,19 @@ static void on_hook(void *ctx, uint16_t address) {
       if(is_active(r) && life_before==1 && r->mem[life_address]==0) game_over=1;
       break;
   }
+  if(r->transitioned) r->cpu.cycles=r->run_budget;
 }
 
 static void run_one_frame(Room *r) {
   r->frame_cycles=0;
-  r->frame_cycles+=(int)z80_run(&r->cpu,CYCLES_BEFORE_INT);
+  r->transitioned=0;
+  r->run_budget=CYCLES_BEFORE_INT;
+  r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
+  if(r->transitioned) { r->frame_cycles=0; return; }
   z80_int(&r->cpu,1);
-  r->frame_cycles+=(int)z80_run(&r->cpu,32);
+  r->run_budget=32;
+  r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
+  if(r->transitioned) { r->frame_cycles=0; return; }
   z80_int(&r->cpu,0);
   r->frame_cycles-=FRAME_CYCLES;
 }
@@ -271,7 +285,7 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
     r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->visited=0; r->lock=0;
     r->cpu.cycles=0;
   }
-  current_room=8; initialized=1; hook_error=0; game_over=0; audio_count=0; audio_last=0; debug_write_count=0;
+  current_room=8; initialized=1; hook_error=0; game_over=0; active_frame_number=0; transition_frame=-1; transition_room=-1; audio_count=0; audio_last=0; debug_write_count=0;
   for(int i=0;i<8;i++) key_matrix[i]=0xff;
   return 0;
 }
@@ -284,19 +298,27 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
   if(max_frames_per_room<1) max_frames_per_room=1;
   if(max_frames_per_room>50) max_frames_per_room=50;
   if(background_divisor<1) background_divisor=1;
+  __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
   for(int i=start_room;i<end_room;i++) {
     Room *r=&rooms[i];
+    if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
+       __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) continue;
     int col=i%16, row=i/16;
     int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
     int active=is_active(r);
     int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
     if(!active && !visible && !visited_background) continue;
     lock_room(r);
+    if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
+       __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
+      unlock_room(r);
+      continue;
+    }
     if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
       int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
       for(int f=0;f<frames;f++) {
         run_one_frame(r);
-        if(r->drawing) break;
+        if(r->transitioned || r->drawing) break;
       }
     }
     unlock_room(r);
