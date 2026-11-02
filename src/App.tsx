@@ -81,6 +81,7 @@ export default function App() {
   const lastFlashPhaseRef = useRef(false);
   const frameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playingRef = useRef(false);
+  const hasStartedRef = useRef(false);
   const fpsCounterRef = useRef({ started: 0, frames: 0 });
   const telemetryUpdateRef = useRef(0);
   const soundOnRef = useRef(true);
@@ -279,8 +280,10 @@ export default function App() {
     const previousRoom = currentRoomRef.current;
     if (message.currentRoom !== previousRoom) {
       currentRoomRef.current = message.currentRoom;
-      visitedRoomsRef.current[message.currentRoom] = true;
-      setVisitedVersion(version => version + 1);
+      if (hasStartedRef.current) {
+        visitedRoomsRef.current[message.currentRoom] = true;
+        setVisitedVersion(version => version + 1);
+      }
       setCurrentRoom(message.currentRoom);
       centerRoomKeepZoom(message.currentRoom);
     }
@@ -317,7 +320,7 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); visitedRoomsRef.current[message.currentRoom] = true; setVisitedVersion(version => version + 1);
+      setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
       setStatus('Emulator initialised. Ready to play.');
       requestAnimationFrame(() => {
         const viewport = viewportRef.current;
@@ -451,8 +454,8 @@ export default function App() {
     ctx.lineWidth = 3;
     for (let room = 0; room < 512; room++) {
       if (!visitedRoomsRef.current[room] || room === currentRoom) continue;
-      ctx.strokeStyle = '#35d06f';
-      ctx.strokeRect((room % 16) * 256 + 1.5, Math.floor(room / 16) * 144 + 1.5, 253, 141);
+      ctx.fillStyle = 'rgba(190,200,215,.10)';
+      ctx.fillRect((room % 16) * 256, Math.floor(room / 16) * 144, 256, 144);
     }
     ctx.strokeStyle = '#f7d66b';
     ctx.strokeRect(roomXY.x * 256 + 1.5, roomXY.y * 144 + 1.5, 253, 141);
@@ -580,6 +583,12 @@ export default function App() {
     if (playingRef.current) {
       playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
     } else {
+      if (!hasStartedRef.current) {
+        visitedRoomsRef.current.fill(false);
+        visitedRoomsRef.current[currentRoomRef.current] = true;
+        setVisitedVersion(version => version + 1);
+        hasStartedRef.current = true;
+      }
       playingRef.current = true; setPlaying(true); if (soundOnRef.current) startAudio(); setStatus('Running'); beginFrame();
     }
   };
@@ -613,6 +622,7 @@ export default function App() {
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
           {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>The bundled Starquake snapshot and Spectrum ROM are loaded automatically to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
+          {ready && !playing && <div className="start-screen"><div className="empty-chip">STARQUAKE · 48K</div><h1>{hasStartedRef.current ? 'Game paused.' : 'Ready to play?'}</h1><p>{hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.'}</p><button className="primary-button start-play-button" onClick={togglePlay}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
