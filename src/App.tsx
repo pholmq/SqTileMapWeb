@@ -684,7 +684,7 @@ export default function App() {
           <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>{50 / backgroundDivisor} Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
           <div className="panel-section">
             <h3>GAME-OVER DIAGNOSTICS</h3>
-            <p className="control-help">Capture before a death, after respawning, and after the final life is lost. Each capture downloads RAM, CPU position and recent RAM writes.</p>
+            <p className="control-help">Capture before a death, after respawning, and after the final life is lost. Captures always include RAM and CPU position; recent RAM writes are included after rebuilding the diagnostic WebAssembly modules.</p>
             <button className="primary-button" onClick={captureGameDiagnostics} disabled={!ready || debugCapturePending}>{debugCapturePending ? 'Capturing…' : 'Capture diagnostic'}</button>
           </div>
           <div className="panel-section">
