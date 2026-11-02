@@ -68,7 +68,6 @@ export default function App() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const workersRef = useRef<Worker[]>([]);
-  const workerCountRef = useRef(1);
   const poolReadyRef = useRef(false);
   const moduleReadyRef = useRef(new Set<number>());
   const cameraRef = useRef<Camera>({ scale: DEFAULT_ZOOM_SCALE, x: 0, y: 0 });
@@ -82,7 +81,6 @@ export default function App() {
   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
-  const debugCaptureIdRef = useRef(0);
   const currentRoomRef = useRef(8);
   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
   const lastFlashPhaseRef = useRef(false);
@@ -102,7 +100,6 @@ export default function App() {
   const [currentRoom, setCurrentRoom] = useState(8);
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
-  const [workerCount, setWorkerCount] = useState(1);
   const [soundOn, setSoundOn] = useState(true);
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
@@ -370,7 +367,7 @@ export default function App() {
     if (message.type === 'module-ready') {
       moduleReadyRef.current.add(message.workerIndex);
       if (moduleReadyRef.current.size === message.workerCount) {
-        poolReadyRef.current = true; setPoolReady(true); setWorkerCount(message.workerCount);
+        poolReadyRef.current = true; setPoolReady(true);
         setStatus(message.shared ? `Ready · ${message.workerCount} parallel WebAssembly workers` : 'Ready · single-worker compatibility mode');
       }
       return;
@@ -434,7 +431,6 @@ export default function App() {
     const shared = window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
     const count = shared ? Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4)) : 1;
     const memory = shared ? new WebAssembly.Memory({ initial: 1024, maximum: 2048, shared: true }) : undefined;
-    workerCountRef.current = count;
     const workers = Array.from({ length: count }, () => new Worker(new URL('./emu/emu.worker.ts', import.meta.url), { type: 'module' }));
     workersRef.current = workers;
     workers.forEach((worker, index) => {
@@ -519,7 +515,7 @@ export default function App() {
     };
     draw();
     return () => cancelAnimationFrame(animation);
-  }, [roomXY, currentRoom, visitedVersion]);
+  }, [currentRoom, visitedVersion]);
 
   useEffect(() => {
     const publishKeys = () => {
@@ -620,13 +616,6 @@ export default function App() {
     applyCamera({ ...cameraRef.current, x: d.cameraX + event.clientX - d.x, y: d.cameraY + event.clientY - d.y });
   };
   const onPointerUp = () => { dragRef.current = null; };
-
-  const captureGameDiagnostics = () => {
-    if (!ready || debugCapturePending) return;
-    setDebugCapturePending(true);
-    const workerIndex = Math.min(workerCountRef.current - 1, Math.ceil((currentRoomRef.current + 1) * workerCountRef.current / 512) - 1);
-    workersRef.current[workerIndex]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
-  };
 
   const togglePlay = () => {
     if (!ready || gameOver) return;
