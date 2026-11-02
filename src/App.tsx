@@ -24,9 +24,9 @@ type WorkerMessage =
   | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeTraceAvailable: boolean; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
-  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
+  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; onTeleporter: boolean; audioOverflow: boolean };
 type Camera = { scale: number; x: number; y: number };
-type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean };
+type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; onTeleporter: boolean };
 const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
 type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
@@ -106,10 +106,20 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
   const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
+  const teleporterActiveRef = useRef(false);
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
   const controlsRef = useRef(controls);
   controlsRef.current = controls;
+
+  const changeKeyboardMode = useCallback((next: 'mapped' | 'spectrum') => {
+    if (keyboardModeRef.current === next) return;
+    keyboardModeRef.current = next;
+    setKeyboardMode(next);
+    pressedCodesRef.current.clear();
+    keyRowsRef.current = [...INITIAL_KEYS];
+    workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+  }, []);
 
   soundOnRef.current = soundOn;
 
@@ -304,6 +314,13 @@ export default function App() {
       if (activeScreen) paintSpectrumHud(hud, activeScreen);
       else hud.clearRect(0, 0, 256, 48);
     }
+    if (message.onTeleporter && !teleporterActiveRef.current) {
+      teleporterActiveRef.current = true;
+      changeKeyboardMode('spectrum');
+    } else if (!message.onTeleporter && teleporterActiveRef.current) {
+      teleporterActiveRef.current = false;
+      if (keyboardModeRef.current === 'spectrum') changeKeyboardMode('mapped');
+    }
     if (message.gameOver) {
       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
       initialPreviewTimerRef.current = null;
@@ -315,15 +332,32 @@ export default function App() {
       setStatus('Game over · all lives lost');
     }
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
-  }, [centerRoomKeepZoom]);
+  }, [centerRoomKeepZoom, changeKeyboardMode]);
 
   const beginFrame = useCallback(() => {
     const workers = workersRef.current;
     if (!playingRef.current || !workers.length || frameStateRef.current) return;
     const id = ++frameIdRef.current;
-    frameStateRef.current = { id, phase: 'begin', started: performance.now(), tickDone: new Set(), collectDone: new Set(), dirty: [], audioEvents: new Uint32Array(0), audioLast: 0, currentRoom: currentRoomRef.current, gameOver: false };
+    frameStateRef.current = { id, phase: 'begin', started: performance.now(), tickDone: new Set(), collectDone: new Set(), dirty: [], audioEvents: new Uint32Array(0), audioLast: 0, currentRoom: currentRoomRef.current, gameOver: false, onTeleporter: false };
     workers[0].postMessage({ type: 'begin', frameId: id });
   }, []);
+
+  const startPlayback = useCallback(() => {
+    if (!ready || gameOver || restarting || playingRef.current) return;
+    if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+    initialPreviewTimerRef.current = null;
+    if (!hasStartedRef.current) {
+      visitedRoomsRef.current.fill(false);
+      visitedAtRef.current.fill(0);
+      setVisitedVersion(version => version + 1);
+      hasStartedRef.current = true;
+    }
+    playingRef.current = true;
+    setPlaying(true);
+    if (soundOnRef.current) startAudio();
+    setStatus('Running');
+    beginFrame();
+  }, [ready, gameOver, restarting, beginFrame]);
 
   const handleWorkerMessage = useCallback((message: WorkerMessage) => {
     if (message.type === 'debug-error') {
@@ -441,12 +475,16 @@ export default function App() {
     } else if (message.type === 'collected' && frame.phase === 'collect') {
       frame.collectDone.add(message.workerIndex);
       frame.dirty.push(...message.dirty);
-      if (message.workerIndex === 0) { frame.audioEvents = message.audioEvents; frame.audioLast = message.audioLast; }
+      if (message.workerIndex === 0) {
+        frame.audioEvents = message.audioEvents;
+        frame.audioLast = message.audioLast;
+        frame.onTeleporter = message.onTeleporter;
+      }
       frame.currentRoom = message.currentRoom;
       frame.gameOver = frame.gameOver || message.gameOver;
       if (frame.collectDone.size === workers.length) {
         const elapsed = performance.now() - frame.started;
-        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
+        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver, onTeleporter: frame.onTeleporter });
         frameStateRef.current = null;
         if (playingRef.current) {
           const delay = Math.max(0, 20 - elapsed);
@@ -589,11 +627,7 @@ export default function App() {
         event.preventDefault();
         event.stopPropagation();
         const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
-        keyboardModeRef.current = next;
-        setKeyboardMode(next);
-        pressedCodesRef.current.clear();
-        keyRowsRef.current = [...INITIAL_KEYS];
-        workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+        changeKeyboardMode(next);
         return;
       }
 
@@ -603,6 +637,7 @@ export default function App() {
         if (!event.repeat || !pressedCodesRef.current.has(event.code)) {
           pressedCodesRef.current.add(event.code);
           publishKeys();
+          if (!playingRef.current && ready && !gameOver && !restarting) startPlayback();
         }
         return;
       }
@@ -637,7 +672,7 @@ export default function App() {
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', clearPressed);
     };
-  }, [applyCamera, fitMap, focusRoom]);
+  }, [applyCamera, fitMap, focusRoom, changeKeyboardMode, ready, gameOver, restarting, startPlayback]);
 
   const zoomAt = (x: number, y: number, factor: number) => {
     const c = cameraRef.current; const scale = Math.max(0.025, Math.min(8, c.scale * factor));
@@ -665,27 +700,18 @@ export default function App() {
 
   const toggleKeyboardMode = () => {
     const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
-    keyboardModeRef.current = next;
-    setKeyboardMode(next);
-    pressedCodesRef.current.clear();
-    keyRowsRef.current = [...INITIAL_KEYS];
-    workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+    changeKeyboardMode(next);
   };
 
   const togglePlay = () => {
     if (!ready || gameOver || restarting) return;
-    if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
-    initialPreviewTimerRef.current = null;
     if (playingRef.current) {
-      playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
+      playingRef.current = false;
+      setPlaying(false);
+      if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+      setStatus('Paused');
     } else {
-      if (!hasStartedRef.current) {
-        visitedRoomsRef.current.fill(false);
-        visitedAtRef.current.fill(0);
-        setVisitedVersion(version => version + 1);
-        hasStartedRef.current = true;
-      }
-      playingRef.current = true; setPlaying(true); if (soundOnRef.current) startAudio(); setStatus('Running'); beginFrame();
+      startPlayback();
     }
   };
 
