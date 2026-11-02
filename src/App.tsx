@@ -522,7 +522,7 @@ export default function App() {
       const rows = [...INITIAL_KEYS];
       for (const code of pressedCodesRef.current) {
         const binding = controlsRef.current.find(item => item.code && item.code === code);
-        const positions = [binding, SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
+        const positions = binding ? [binding] : [SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
         for (const position of positions) rows[position.row] &= ~(1 << position.bit);
       }
       keyRowsRef.current = rows;
@@ -636,7 +636,7 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.svg`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
-        <div className="top-status"><span className={`status-dot ${playing ? 'live' : ready ? 'ready' : ''}`} />{status}</div>
+        <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
       </header>
 
       <section className="toolbar">
@@ -653,7 +653,6 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
         </div>
         <aside className="side-panel">
           <div className="panel-section">
