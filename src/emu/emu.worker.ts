@@ -6,7 +6,8 @@ type KeyMessage = { type: 'keys'; rows: number[] };
 type BeginMessage = { type: 'begin'; frameId: number };
 type TickMessage = { type: 'tick'; frameId: number; backgroundDivisor: number; minCol: number; maxCol: number; minRow: number; maxRow: number };
 type CollectMessage = { type: 'collect'; frameId: number };
-type Incoming = ModuleMessage | InitMessage | KeyMessage | BeginMessage | TickMessage | CollectMessage | { type: 'stop' };
+type DebugMessage = { type: 'debug-capture'; captureId: number };
+type Incoming = ModuleMessage | InitMessage | KeyMessage | BeginMessage | TickMessage | CollectMessage | DebugMessage | { type: 'stop' };
 
 let wasm: WebAssembly.Exports | null = null;
 let memory: WebAssembly.Memory | null = null;
@@ -104,6 +105,38 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       scope.postMessage({ type: 'tick-done', frameId: message.frameId, workerIndex });
     } else if (message.type === 'collect') {
       collect(message.frameId);
+    } else if (message.type === 'debug-capture' && wasm && memory) {
+      const e = wasm as Record<string, any>;
+      const heap = new Uint8Array(memory.buffer);
+      const room = e.emu_current_room() | 0;
+      const hasWriteTrace = ['emu_debug_ram_ptr', 'emu_debug_pc', 'emu_debug_sp', 'emu_debug_write_ptr', 'emu_debug_write_count', 'emu_debug_write_capacity', 'emu_debug_clear_writes'].every(name => typeof e[name] === 'function');
+      const ramPointer = (hasWriteTrace ? e.emu_debug_ram_ptr() : e.emu_screen_ptr(room)) >>> 0;
+      const ram = heap.slice(ramPointer, ramPointer + 49152);
+      const writeCount = hasWriteTrace ? Math.max(0, e.emu_debug_write_count() | 0) : 0;
+      const writeCapacity = hasWriteTrace ? e.emu_debug_write_capacity() | 0 : 0;
+      const writeBytes = Math.min(writeCount, writeCapacity) * 8;
+      const writes = new Uint8Array(writeBytes);
+      if (hasWriteTrace && writeCapacity > 0) {
+        const writePointer = e.emu_debug_write_ptr() >>> 0;
+        const firstRecord = writeCount > writeCapacity ? writeCount % writeCapacity : 0;
+        for (let i = 0; i < writeBytes; i++) {
+          writes[i] = heap[writePointer + ((firstRecord * 8 + i) % (writeCapacity * 8))];
+        }
+      }
+      const result = {
+        captureId: message.captureId,
+        capturedAt: new Date().toISOString(),
+        room,
+        pc: (hasWriteTrace ? e.emu_debug_pc() : e.emu_room_pc(room)) & 0xffff,
+        sp: (hasWriteTrace ? e.emu_debug_sp() : e.emu_room_sp(room)) & 0xffff,
+        writeTraceAvailable: hasWriteTrace,
+        writeCount,
+        writeCapacity,
+        ram: ram.buffer,
+        writes: writes.buffer,
+      };
+      if (hasWriteTrace) e.emu_debug_clear_writes();
+      scope.postMessage({ type: 'debug-captured', ...result }, [ram.buffer, writes.buffer]);
     } else if (message.type === 'stop') {
       scope.close();
     }
