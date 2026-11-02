@@ -47,16 +47,13 @@ export function paintSpectrumRoom(
   const out = new Uint32Array(image.data.buffer, image.data.byteOffset, image.data.byteLength / 4);
   let dest = 0;
   const flash = flashPhase ? 1 : 0;
-  const roomBase = (((room / 16) | 0) * 144) * MAP_WIDTH + (room % 16) * 256;
   for (let y = 48; y < 192; y++) {
     const bitmapBase = ((y & 0xc0) << 5) | ((y & 0x38) << 2) | ((y & 7) << 8);
     const attrBase = 0x1800 + ((y >> 3) << 5);
-    const rowBase = roomBase + (y - 48) * MAP_WIDTH;
     for (let byteX = 0; byteX < 32; byteX++) {
       const bitmap = screen[bitmapBase + byteX];
       const attr = screen[attrBase + byteX];
       const lookup = (((flash * 256 + attr) * 256 + bitmap) * 8);
-      const x = rowBase + byteX * 8;
       for (let bit = 0; bit < 8; bit++) out[dest + bit] = pixelLookup[lookup + bit];
       dest += 8;
     }
