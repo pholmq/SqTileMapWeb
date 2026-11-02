@@ -1,4 +1,4 @@
-import { PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PointerEvent, WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
 import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
@@ -68,7 +68,6 @@ export default function App() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const workersRef = useRef<Worker[]>([]);
-  const workerCountRef = useRef(1);
   const poolReadyRef = useRef(false);
   const moduleReadyRef = useRef(new Set<number>());
   const cameraRef = useRef<Camera>({ scale: DEFAULT_ZOOM_SCALE, x: 0, y: 0 });
@@ -82,7 +81,6 @@ export default function App() {
   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
-  const debugCaptureIdRef = useRef(0);
   const currentRoomRef = useRef(8);
   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
   const lastFlashPhaseRef = useRef(false);
@@ -102,7 +100,6 @@ export default function App() {
   const [currentRoom, setCurrentRoom] = useState(8);
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
-  const [workerCount, setWorkerCount] = useState(1);
   const [soundOn, setSoundOn] = useState(true);
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
@@ -110,7 +107,6 @@ export default function App() {
   controlsRef.current = controls;
 
   soundOnRef.current = soundOn;
-  const roomXY = useMemo(() => ({ x: currentRoom % 16, y: Math.floor(currentRoom / 16) }), [currentRoom]);
 
   const applyCamera = useCallback((next: Camera) => {
     if (cameraAnimationRef.current !== null) {
@@ -371,7 +367,7 @@ export default function App() {
     if (message.type === 'module-ready') {
       moduleReadyRef.current.add(message.workerIndex);
       if (moduleReadyRef.current.size === message.workerCount) {
-        poolReadyRef.current = true; setPoolReady(true); setWorkerCount(message.workerCount);
+        poolReadyRef.current = true; setPoolReady(true);
         setStatus(message.shared ? `Ready · ${message.workerCount} parallel WebAssembly workers` : 'Ready · single-worker compatibility mode');
       }
       return;
@@ -435,7 +431,6 @@ export default function App() {
     const shared = window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
     const count = shared ? Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4)) : 1;
     const memory = shared ? new WebAssembly.Memory({ initial: 1024, maximum: 2048, shared: true }) : undefined;
-    workerCountRef.current = count;
     const workers = Array.from({ length: count }, () => new Worker(new URL('./emu/emu.worker.ts', import.meta.url), { type: 'module' }));
     workersRef.current = workers;
     workers.forEach((worker, index) => {
@@ -520,7 +515,7 @@ export default function App() {
     };
     draw();
     return () => cancelAnimationFrame(animation);
-  }, [roomXY, currentRoom, visitedVersion]);
+  }, [currentRoom, visitedVersion]);
 
   useEffect(() => {
     const publishKeys = () => {
@@ -622,13 +617,6 @@ export default function App() {
   };
   const onPointerUp = () => { dragRef.current = null; };
 
-  const captureGameDiagnostics = () => {
-    if (!ready || debugCapturePending) return;
-    setDebugCapturePending(true);
-    const workerIndex = Math.min(workerCountRef.current - 1, Math.ceil((currentRoomRef.current + 1) * workerCountRef.current / 512) - 1);
-    workersRef.current[workerIndex]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
-  };
-
   const togglePlay = () => {
     if (!ready || gameOver) return;
     if (playingRef.current) {
@@ -658,7 +646,6 @@ export default function App() {
           <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
         </div>
         <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
-        <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
         <div className="toolbar-spacer" />
         <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
       </section>
@@ -666,17 +653,9 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">{gameOver ? 'GAME OVER' : '512 ROOMS · 16 × 32'}</div><h1>{gameOver ? 'Game Over' : 'Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum'}</h1><p>{gameOver ? 'All lives have been lost.' : ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready || gameOver}><Play size={17} />{gameOver ? 'Game over' : hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
+          <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
         </div>
         <aside className="side-panel">
-          <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
-          <div className="active-room-card"><div className="room-label">ACTIVE ROOM</div><div className="room-number">{currentRoom.toString().padStart(3, '0')}</div><div className="room-coordinates">COLUMN {roomXY.x + 1} / 16 <i /> ROW {roomXY.y + 1} / 32</div></div>
-          <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>25 Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
-          <div className="panel-section">
-            <h3>GAME-OVER DIAGNOSTICS</h3>
-            <p className="control-help">Capture before a death, after respawning, and after the final life is lost. Captures always include RAM and CPU position; recent RAM writes are included after rebuilding the diagnostic WebAssembly modules.</p>
-            <button className="primary-button" onClick={captureGameDiagnostics} disabled={!ready || debugCapturePending}>{debugCapturePending ? 'Capturing…' : 'Capture diagnostic'}</button>
-          </div>
           <div className="panel-section">
             <h3>CONTROLS <span className="control-hint">CUSTOMISE KEY BINDINGS</span></h3>
             <div className="controls-config">
