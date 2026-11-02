@@ -15,13 +15,15 @@ const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
 type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
 const DEFAULT_CONTROLS: ControlBinding[] = [
-  { action: 'up', label: 'Up', code: 'KeyQ', row: 2, bit: 0 },
-  { action: 'down', label: 'Down / platform', code: 'KeyA', row: 1, bit: 0 },
-  { action: 'left', label: 'Left', code: 'KeyO', row: 5, bit: 1 },
-  { action: 'right', label: 'Right', code: 'KeyP', row: 5, bit: 0 },
-  { action: 'fire', label: 'Fire', code: 'KeyM', row: 7, bit: 2 },
+  { action: 'up', label: 'Up', code: 'KeyW', row: 2, bit: 1 },
+  { action: 'down', label: 'Down / platform', code: 'KeyS', row: 1, bit: 1 },
+  { action: 'left', label: 'Left', code: 'KeyA', row: 1, bit: 0 },
+  { action: 'right', label: 'Right', code: 'KeyD', row: 1, bit: 2 },
+  { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 0 },
 ];
-const CONTROL_STORAGE_KEY = 'starquake-controls-v2';
+const ROOM_FOCUS_DURATION_MS = 700;
+const SPECTRUM_FRAME_CYCLES = 70000;
+const CONTROL_STORAGE_KEY = 'starquake-controls-v3';
 function readControls(): ControlBinding[] {
   try {
     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
@@ -56,7 +58,7 @@ export default function App() {
   const pressedCodesRef = useRef(new Set<string>());
   const captureActionRef = useRef<GameAction | null>(null);
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
-  const audioRef = useRef<{ context: AudioContext | null; oscillator: OscillatorNode | null; gain: GainNode | null }>({ context: null, oscillator: null, gain: null });
+  const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean }>({ context: null, nextTime: 0, lastLevel: false });
   const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
@@ -70,8 +72,8 @@ export default function App() {
   const soundOnRef = useRef(true);
   const backgroundDivisorRef = useRef(5);
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
-  const [cameraSmoothing, setCameraSmoothing] = useState(false);
-  const cameraTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const worldRef = useRef<HTMLDivElement>(null);
+  const cameraAnimationRef = useRef<number | null>(null);
   const [status, setStatus] = useState('Preparing browser emulator…');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -97,6 +99,10 @@ export default function App() {
   const roomXY = useMemo(() => ({ x: currentRoom % 16, y: Math.floor(currentRoom / 16) }), [currentRoom]);
 
   const applyCamera = useCallback((next: Camera) => {
+    if (cameraAnimationRef.current !== null) {
+      cancelAnimationFrame(cameraAnimationRef.current);
+      cameraAnimationRef.current = null;
+    }
     cameraRef.current = next;
     setCamera(next);
   }, []);
@@ -119,52 +125,86 @@ export default function App() {
   const centerRoomKeepZoom = useCallback((room: number) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const c = cameraRef.current;
+    if (cameraAnimationRef.current !== null) cancelAnimationFrame(cameraAnimationRef.current);
+    const start = cameraRef.current;
     const roomCenterX = (room % 16) * 256 + 128;
     const roomCenterY = Math.floor(room / 16) * 144 + 72;
-    setCameraSmoothing(true);
-    if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
-    applyCamera({
-      ...c,
-      x: viewport.clientWidth / 2 - roomCenterX * c.scale,
-      y: viewport.clientHeight / 2 - roomCenterY * c.scale,
-    });
-    cameraTransitionTimerRef.current = setTimeout(() => {
-      setCameraSmoothing(false);
-      cameraTransitionTimerRef.current = null;
-    }, 360);
-  }, [applyCamera]);
+    const targetX = viewport.clientWidth / 2 - roomCenterX * start.scale;
+    const targetY = viewport.clientHeight / 2 - roomCenterY * start.scale;
+    const startedAt = performance.now();
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / ROOM_FOCUS_DURATION_MS);
+      const eased = progress * progress * (3 - 2 * progress);
+      const next = { ...start, x: start.x + (targetX - start.x) * eased, y: start.y + (targetY - start.y) * eased };
+      cameraRef.current = next;
+      if (worldRef.current) worldRef.current.style.transform = `translate3d(${next.x}px, ${next.y}px, 0) scale(${next.scale})`;
+      if (progress < 1) cameraAnimationRef.current = requestAnimationFrame(animate);
+      else {
+        cameraAnimationRef.current = null;
+        cameraRef.current = { ...start, x: targetX, y: targetY };
+        setCamera(cameraRef.current);
+      }
+    };
+    cameraAnimationRef.current = requestAnimationFrame(animate);
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem(CONTROL_STORAGE_KEY, JSON.stringify(controls)); } catch { /* Storage may be unavailable. */ }
   }, [controls]);
 
   function startAudio() {
-    if (audioRef.current.context) return;
+    const existing = audioRef.current.context;
+    if (existing) { void existing.resume(); return; }
     const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    oscillator.type = 'square'; oscillator.frequency.value = 440; gain.gain.value = 0;
-    oscillator.connect(gain); gain.connect(context.destination); oscillator.start();
-    audioRef.current = { context, oscillator, gain };
+    audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false };
+    void context.resume();
   }
   function stopAudio() {
-    const a = audioRef.current;
-    if (a.oscillator) a.oscillator.stop();
-    a.context?.close();
-    audioRef.current = { context: null, oscillator: null, gain: null };
+    const context = audioRef.current.context;
+    if (context) void context.close();
+    audioRef.current = { context: null, nextTime: 0, lastLevel: false };
   }
   function playBeeper(events: Uint32Array, last: number) {
-    const a = audioRef.current;
-    if (!a.context || !a.gain) return;
-    const now = a.context.currentTime + 0.004;
-    if (events.length) {
-      for (const packed of events) {
-        const cycle = packed >>> 8;
-        const value = packed & 255;
-        a.gain.gain.setValueAtTime((value & 0x10) ? 0.035 : 0, now + Math.max(0, Math.min(0.02, cycle / 3500000)));
+    const audio = audioRef.current;
+    const context = audio.context;
+    if (!context) return;
+    const sampleRate = context.sampleRate;
+    const sampleCount = Math.round(sampleRate / 50);
+    const frameDuration = sampleCount / sampleRate;
+    const buffer = context.createBuffer(1, sampleCount, sampleRate);
+    const samples = buffer.getChannelData(0);
+    let level = audio.lastLevel;
+    let eventIndex = 0;
+    let nextCycle = events.length ? (events[0] >>> 8) : Infinity;
+    for (let sample = 0; sample < sampleCount; sample++) {
+      const sampleStart = sample * SPECTRUM_FRAME_CYCLES / sampleCount;
+      const sampleEnd = (sample + 1) * SPECTRUM_FRAME_CYCLES / sampleCount;
+      while (eventIndex < events.length && nextCycle <= sampleStart) {
+        level = (events[eventIndex] & 0x10) !== 0;
+        eventIndex++;
+        nextCycle = eventIndex < events.length ? (events[eventIndex] >>> 8) : Infinity;
       }
-    } else a.gain.gain.setTargetAtTime((last & 0x10) ? 0.035 : 0, now, 0.002);
+      let cursor = sampleStart;
+      let area = 0;
+      while (eventIndex < events.length && nextCycle < sampleEnd) {
+        area += (nextCycle - cursor) * (level ? 1 : -1);
+        cursor = nextCycle;
+        level = (events[eventIndex] & 0x10) !== 0;
+        eventIndex++;
+        nextCycle = eventIndex < events.length ? (events[eventIndex] >>> 8) : Infinity;
+      }
+      area += (sampleEnd - cursor) * (level ? 1 : -1);
+      samples[sample] = (area / (sampleEnd - sampleStart)) * 0.18;
+    }
+    audio.lastLevel = (last & 0x10) !== 0;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.connect(context.destination);
+    let startAt = Math.max(context.currentTime + 0.005, audio.nextTime);
+    if (startAt > context.currentTime + 0.08) startAt = context.currentTime + 0.005;
+    source.start(startAt);
+    audio.nextTime = startAt + frameDuration;
+    source.onended = () => source.disconnect();
   }
 
   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
@@ -294,7 +334,7 @@ export default function App() {
     return () => {
       if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
       workers.forEach(worker => { worker.postMessage({ type: 'stop' }); worker.terminate(); });
-      if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
+      if (cameraAnimationRef.current !== null) cancelAnimationFrame(cameraAnimationRef.current);
       workersRef.current = []; stopAudio();
     };
   }, [handleWorkerMessage]);
@@ -507,7 +547,7 @@ export default function App() {
 
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-          <div className={`world ${cameraSmoothing ? 'smooth' : ''}`} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+          <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
           {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>The bundled Starquake snapshot and Spectrum ROM are loaded automatically to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
         </div>
         <aside className="side-panel">
