@@ -82,9 +82,10 @@ static void clone_room(Room *from, Room *to) {
   to->dirty=1;
   unlock_room(to);
 }
-static void clone_room_for_entry(Room *from, Room *to, uint16_t room) {
-  if (from==to) return;
+static int clone_room_for_entry(Room *from, Room *to, uint16_t room) {
+  if (from==to) return 0;
   lock_room(to);
+  if(to->visited) { unlock_room(to); return 0; }
   copy_bytes(to->mem,from->mem,65536);
   to->cpu.state=from->cpu.state;
   poke16(to,0xd2c8,room);
@@ -92,6 +93,7 @@ static void clone_room_for_entry(Room *from, Room *to, uint16_t room) {
   to->drawing=0;
   to->visited=1;
   unlock_room(to);
+  return 1;
 }
 static void clone_all(Room *from) {
   for(int i=0;i<ROOM_COUNT;i++) {
@@ -170,7 +172,7 @@ static void on_hook(void *ctx, uint16_t address) {
         Room *next=&rooms[new_room];
         r->visited=1;
         /* Seed a room only on its first visit; revisits keep their own CPU and RAM. */
-        if(!next->visited) clone_room_for_entry(r,next,new_room);
+        clone_room_for_entry(r,next,new_room);
         __atomic_store_n(&current_room,new_room,__ATOMIC_SEQ_CST);
       }
       r->drawing=0;
