@@ -21,7 +21,7 @@ type WorkerMessage =
   | { type: 'ready'; roomCount: number; currentRoom: number }
   | { type: 'error'; message: string }
   | { type: 'debug-error'; message: string }
-  | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
+  | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeTraceAvailable: boolean; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
   | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; audioOverflow: boolean };
@@ -342,6 +342,7 @@ export default function App() {
         ramStart: '0x4000',
         ramEnd: '0xffff',
         ramHex: Array.from(ram, value => value.toString(16).padStart(2, '0')).join(''),
+        writeTraceAvailable: message.writeTraceAvailable,
         writeCountSincePreviousCapture: message.writeCount,
         writeLogTruncated: message.writeCount > message.writeCapacity,
         writes,
