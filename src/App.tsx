@@ -1,5 +1,5 @@
-import { ChangeEvent, PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair, Upload, RotateCcw } from 'lucide-react';
+import { PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
 import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
 const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
@@ -39,6 +39,7 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
 ];
 const ROOM_FOCUS_DURATION_MS = 1150;
 const DEFAULT_ZOOM_SCALE = 2.11;
+const BACKGROUND_DIVISOR = 2;
 const SPECTRUM_FRAME_CYCLES = 70000;
 const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
 function readControls(): ControlBinding[] {
@@ -79,7 +80,6 @@ export default function App() {
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
-  const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
   const debugCaptureIdRef = useRef(0);
@@ -89,10 +89,7 @@ export default function App() {
   const frameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playingRef = useRef(false);
   const hasStartedRef = useRef(false);
-  const fpsCounterRef = useRef({ started: 0, frames: 0 });
-  const telemetryUpdateRef = useRef(0);
   const soundOnRef = useRef(true);
-  const backgroundDivisorRef = useRef(5);
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
   const worldRef = useRef<HTMLDivElement>(null);
   const cameraAnimationRef = useRef<number | null>(null);
@@ -104,23 +101,15 @@ export default function App() {
   const [gameOver, setGameOver] = useState(false);
   const [currentRoom, setCurrentRoom] = useState(8);
   const [visitedVersion, setVisitedVersion] = useState(0);
-  const [fps, setFps] = useState(0);
-  const [frameMs, setFrameMs] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
-  const [roomCount, setRoomCount] = useState(512);
   const [workerCount, setWorkerCount] = useState(1);
-  const [cheats, setCheats] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [backgroundDivisor, setBackgroundDivisor] = useState(2);
-  const [romName, setRomName] = useState('');
-  const [snapshotName, setSnapshotName] = useState('No snapshot loaded');
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
   const controlsRef = useRef(controls);
   controlsRef.current = controls;
 
   soundOnRef.current = soundOn;
-  backgroundDivisorRef.current = backgroundDivisor;
   const roomXY = useMemo(() => ({ x: currentRoom % 16, y: Math.floor(currentRoom / 16) }), [currentRoom]);
 
   const applyCamera = useCallback((next: Camera) => {
@@ -143,7 +132,7 @@ export default function App() {
     const targetRoom = room ?? currentRoomRef.current;
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const scale = Math.min(viewport.clientWidth / 256, viewport.clientHeight / 144) * 0.88;
+    const scale = DEFAULT_ZOOM_SCALE;
     applyCamera({ scale, x: (viewport.clientWidth - 256 * scale) / 2 - (targetRoom % 16) * 256 * scale, y: (viewport.clientHeight - 144 * scale) / 2 - Math.floor(targetRoom / 16) * 144 * scale });
   }, [applyCamera]);
 
@@ -321,15 +310,6 @@ export default function App() {
       setStatus('Game over · all lives lost');
     }
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
-    const now = performance.now();
-    const counter = fpsCounterRef.current;
-    counter.frames++;
-    if (!counter.started) counter.started = now;
-    if (now - counter.started >= 1000) {
-      setFps(counter.frames * 1000 / (now - counter.started));
-      counter.frames = 0;
-      counter.started = now;
-    }
   }, [centerRoomKeepZoom]);
 
   const beginFrame = useCallback(() => {
@@ -397,7 +377,7 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setGameOver(false); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); setVisitedVersion(version => version + 1);
+      setReady(true); setGameOver(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); setVisitedVersion(version => version + 1);
       setStatus('Emulator initialised. Ready to play.');
       requestAnimationFrame(() => {
         const viewport = viewportRef.current;
@@ -425,7 +405,7 @@ export default function App() {
       const maxCol = Math.min(15, Math.ceil(right / 256) - 1);
       const minRow = Math.max(0, Math.floor(top / 144));
       const maxRow = Math.min(31, Math.ceil(bottom / 144) - 1);
-      for (const worker of workers) worker.postMessage({ type: 'tick', frameId: frame.id, backgroundDivisor: backgroundDivisorRef.current, minCol, maxCol, minRow, maxRow });
+      for (const worker of workers) worker.postMessage({ type: 'tick', frameId: frame.id, backgroundDivisor: BACKGROUND_DIVISOR, minCol, maxCol, minRow, maxRow });
     } else if (message.type === 'tick-done' && frame.phase === 'tick') {
       frame.tickDone.add(message.workerIndex);
       if (frame.tickDone.size === workers.length) {
@@ -441,10 +421,6 @@ export default function App() {
       if (frame.collectDone.size === workers.length) {
         const elapsed = performance.now() - frame.started;
         drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
-        if (performance.now() - telemetryUpdateRef.current >= 250) {
-          setFrameMs(elapsed);
-          telemetryUpdateRef.current = performance.now();
-        }
         frameStateRef.current = null;
         if (playingRef.current) {
           const delay = Math.max(0, 20 - elapsed);
@@ -493,9 +469,6 @@ export default function App() {
         if (snapshot.byteLength !== 49179) throw new Error(`Bundled snapshot must be 49,179 bytes; got ${snapshot.byteLength}.`);
         if (rom.byteLength < 16384) throw new Error(`Bundled Spectrum ROM must contain at least 16,384 bytes; got ${rom.byteLength}.`);
         if (cancelled) return;
-        snapshotRef.current = snapshot;
-        setSnapshotName('starquake.sna');
-        setRomName('48.rom');
         setStatus('Initialising all 512 room states…');
         workersRef.current[0].postMessage({ type: 'init', snapshot, rom, cheats: false }, [snapshot, rom]);
       } catch (cause) {
@@ -649,23 +622,6 @@ export default function App() {
   };
   const onPointerUp = () => { dragRef.current = null; };
 
-  const loadRom = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]; if (!file) return;
-    if (!poolReadyRef.current) { setError('The emulator workers are still loading. Try again in a moment.'); return; }
-    if (!snapshotRef.current) { setError('Select a compatible Starquake 48K .sna snapshot first.'); return; }
-    setError(''); setReady(false); playingRef.current = false; setPlaying(false); setStatus('Initialising all 512 room states…'); setRomName(file.name);
-    const rom = await file.arrayBuffer();
-    if (rom.byteLength < 16384) { setError('The Spectrum ROM file must contain at least 16,384 bytes.'); return; }
-    const snapshot = snapshotRef.current.slice(0);
-    workersRef.current[0].postMessage({ type: 'init', snapshot, rom, cheats }, [snapshot, rom]);
-  };
-  const loadSnapshot = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]; if (!file) return;
-    const buffer = await file.arrayBuffer();
-    if (buffer.byteLength !== 49179) { setError(`Expected an uncompressed 48K .sna snapshot of 49,179 bytes; got ${buffer.byteLength}.`); return; }
-    snapshotRef.current = buffer; setSnapshotName(file.name); setError('');
-    setReady(false); playingRef.current = false; setPlaying(false); setStatus('Snapshot selected. Select a compatible Spectrum ROM to initialise.');
-  };
   const captureGameDiagnostics = () => {
     if (!ready || debugCapturePending) return;
     setDebugCapturePending(true);
@@ -691,13 +647,8 @@ export default function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div className="brand"><div className="brand-mark">SQ</div><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
+        <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.svg`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
         <div className="top-status"><span className={`status-dot ${playing ? 'live' : ready ? 'ready' : ''}`} />{status}</div>
-        <div className="top-actions">
-          <label className="file-button"><Upload size={15} /> ROM<input type="file" accept=".rom,.bin,.48k" onChange={loadRom} /></label>
-          <label className="file-button secondary"><Upload size={15} /> SNAPSHOT<input type="file" accept=".sna" onChange={loadSnapshot} /></label>
-          <label className="cheat-toggle"><input type="checkbox" checked={cheats} disabled={ready} onChange={(e: ChangeEvent<HTMLInputElement>) => setCheats(e.target.checked)} /> Cheats</label>
-        </div>
       </header>
 
       <section className="toolbar">
@@ -706,23 +657,21 @@ export default function App() {
           <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
           <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
         </div>
-        <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button><button className="icon-button" title="Reset view" onClick={fitMap}><RotateCcw size={15} /></button></div>
+        <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
+        <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
         <div className="toolbar-spacer" />
-        <label className="rate-control">BACKGROUND <select value={backgroundDivisor} onChange={(e: ChangeEvent<HTMLSelectElement>) => setBackgroundDivisor(Number(e.target.value))}><option value={5}>10 Hz</option><option value={2}>25 Hz</option><option value={1}>50 Hz · full</option></select></label>
         <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
-        <div className="telemetry"><span>ROOM <b>{currentRoom.toString().padStart(3, '0')}</b></span><span>GRID <b>{roomXY.x},{roomXY.y}</b></span><span>ROOMS <b>{roomCount}</b></span><span>WORKERS <b>{workerCount}</b></span><span>FPS <b>{fps ? fps.toFixed(0) : '—'}</b></span><span>FRAME <b>{frameMs.toFixed(1)}ms</b></span></div>
       </section>
 
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
-          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">{gameOver ? 'GAME OVER' : '512 ROOMS · 16 × 32'}</div><h1>{gameOver ? 'Game Over' : 'Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum'}</h1><p>{gameOver ? 'All lives have been lost.' : ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready || gameOver}><Play size={17} />{gameOver ? 'Game over' : hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
+          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">{gameOver ? 'GAME OVER' : '512 ROOMS · 16 × 32'}</div><h1>{gameOver ? 'Game Over' : 'Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum'}</h1><p>{gameOver ? 'All lives have been lost.' : ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready || gameOver}><Play size={17} />{gameOver ? 'Game over' : hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
           <div className="active-room-card"><div className="room-label">ACTIVE ROOM</div><div className="room-number">{currentRoom.toString().padStart(3, '0')}</div><div className="room-coordinates">COLUMN {roomXY.x + 1} / 16 <i /> ROW {roomXY.y + 1} / 32</div></div>
-          <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>{50 / backgroundDivisor} Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
+          <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>25 Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
           <div className="panel-section">
             <h3>GAME-OVER DIAGNOSTICS</h3>
             <p className="control-help">Capture before a death, after respawning, and after the final life is lost. Captures always include RAM and CPU position; recent RAM writes are included after rebuilding the diagnostic WebAssembly modules.</p>
