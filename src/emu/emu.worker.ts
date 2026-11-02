@@ -105,7 +105,7 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       scope.postMessage({ type: 'tick-done', frameId: message.frameId, workerIndex });
     } else if (message.type === 'collect') {
       collect(message.frameId);
-    } else if (message.type === 'debug-capture' && wasm && memory && workerIndex === 0) {
+    } else if (message.type === 'debug-capture' && wasm && memory) {
       const e = wasm as Record<string, any>;
       const heap = new Uint8Array(memory.buffer);
       const ram = heap.slice(e.emu_debug_ram_ptr() >>> 0, (e.emu_debug_ram_ptr() >>> 0) + 49152);
