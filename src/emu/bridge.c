@@ -301,9 +301,8 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
   (void)min_col; (void)max_col; (void)min_row; (void)max_row;
   if(start_room<0) start_room=0;
   if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
-  if(max_frames_per_room<1) max_frames_per_room=1;
-  if(max_frames_per_room>50) max_frames_per_room=50;
-  if(background_divisor<1) background_divisor=1;
+  (void)max_frames_per_room;
+  (void)background_divisor;
   __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
   for(int i=start_room;i<end_room;i++) {
     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
@@ -321,12 +320,7 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
       unlock_room(r);
       continue;
     }
-    if(r->running) {
-      for(int f=0;f<max_frames_per_room;f++) {
-        run_one_frame(r);
-        if(r->transitioned || r->drawing || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) break;
-      }
-    }
+    if(r->running) run_one_frame(r);
     unlock_room(r);
     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
   }
