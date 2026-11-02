@@ -85,6 +85,8 @@ export default function App() {
   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
   const lastFlashPhaseRef = useRef(false);
   const frameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasAutoPreviewedRef = useRef(false);
   const playingRef = useRef(false);
   const hasStartedRef = useRef(false);
   const soundOnRef = useRef(true);
@@ -94,6 +96,7 @@ export default function App() {
   const [status, setStatus] = useState('Preparing browser emulator…');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
+  const [restarting, setRestarting] = useState(false);
   const [poolReady, setPoolReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [gameOver, setGameOver] = useState(false);
@@ -300,6 +303,8 @@ export default function App() {
       else hud.clearRect(0, 0, 256, 48);
     }
     if (message.gameOver) {
+      if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+      initialPreviewTimerRef.current = null;
       playingRef.current = false;
       setPlaying(false);
       setGameOver(true);
@@ -373,16 +378,37 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setGameOver(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); setVisitedVersion(version => version + 1);
-      setStatus('Emulator initialised. Ready to play.');
+      setReady(true); setGameOver(false); setRestarting(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); screenCacheRef.current.fill(null); flashRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
+      const map = mapCanvasRef.current?.getContext('2d');
+      if (map) { map.fillStyle = '#05080d'; map.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
+      const hud = hudCanvasRef.current?.getContext('2d');
+      if (hud) hud.clearRect(0, 0, 256, 48);
+      setStatus('Emulator initialised. Showing startup graphics…');
       requestAnimationFrame(() => {
         const viewport = viewportRef.current;
-        if (!viewport) return;
-        const scale = DEFAULT_ZOOM_SCALE;
-        const room = message.currentRoom;
-        const roomCenterX = (room % 16) * 256 + 128;
-        const roomCenterY = Math.floor(room / 16) * 144 + 72;
-        applyCamera({ scale, x: viewport.clientWidth / 2 - roomCenterX * scale, y: viewport.clientHeight / 2 - roomCenterY * scale });
+        if (viewport) {
+          const scale = DEFAULT_ZOOM_SCALE;
+          const room = message.currentRoom;
+          const roomCenterX = (room % 16) * 256 + 128;
+          const roomCenterY = Math.floor(room / 16) * 144 + 72;
+          applyCamera({ scale, x: viewport.clientWidth / 2 - roomCenterX * scale, y: viewport.clientHeight / 2 - roomCenterY * scale });
+        }
+        if (!hasAutoPreviewedRef.current) {
+          hasAutoPreviewedRef.current = true;
+          hasStartedRef.current = true;
+          playingRef.current = true;
+          setPlaying(true);
+          setStatus('Running');
+          beginFrame();
+          initialPreviewTimerRef.current = setTimeout(() => {
+            if (playingRef.current) {
+              playingRef.current = false;
+              setPlaying(false);
+              setStatus('Paused');
+            }
+            initialPreviewTimerRef.current = null;
+          }, 1000);
+        }
       });
       return;
     }
@@ -441,6 +467,7 @@ export default function App() {
     if (!shared) setStatus('Loading Z80 emulator · single-worker mode (enable cross-origin isolation for parallel emulation)');
     return () => {
       if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+      if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
       workers.forEach(worker => { worker.postMessage({ type: 'stop' }); worker.terminate(); });
       if (cameraAnimationRef.current !== null) cancelAnimationFrame(cameraAnimationRef.current);
       workersRef.current = []; stopAudio();
@@ -618,7 +645,9 @@ export default function App() {
   const onPointerUp = () => { dragRef.current = null; };
 
   const togglePlay = () => {
-    if (!ready || gameOver) return;
+    if (!ready || gameOver || restarting) return;
+    if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+    initialPreviewTimerRef.current = null;
     if (playingRef.current) {
       playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
     } else {
@@ -632,6 +661,37 @@ export default function App() {
     }
   };
 
+  const restartGame = async () => {
+    if (!ready || restarting) return;
+    playingRef.current = false;
+    setPlaying(false);
+    if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+    if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+    initialPreviewTimerRef.current = null;
+    frameStateRef.current = null;
+    setReady(false);
+    setRestarting(true);
+    setError('');
+    setStatus('Restarting Starquake…');
+    try {
+      const base = import.meta.env.BASE_URL;
+      const [snapshotResponse, romResponse] = await Promise.all([fetch(`${base}starquake.sna`), fetch(`${base}48.rom`)]);
+      if (!snapshotResponse.ok) throw new Error(`Could not load bundled snapshot (${snapshotResponse.status}).`);
+      if (!romResponse.ok) throw new Error(`Could not load bundled Spectrum ROM (${romResponse.status}).`);
+      const [snapshot, rom] = await Promise.all([snapshotResponse.arrayBuffer(), romResponse.arrayBuffer()]);
+      if (snapshot.byteLength !== 49179) throw new Error(`Bundled snapshot must be 49,179 bytes; got ${snapshot.byteLength}.`);
+      if (rom.byteLength < 16384) throw new Error(`Bundled Spectrum ROM must contain at least 16,384 bytes; got ${rom.byteLength}.`);
+      const worker = workersRef.current[0];
+      if (!worker) throw new Error('The emulator worker is unavailable. Reload the page to initialise it again.');
+      worker.postMessage({ type: 'init', snapshot, rom, cheats: false }, [snapshot, rom]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      setStatus('Could not restart the game');
+      setReady(true);
+      setRestarting(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -642,7 +702,7 @@ export default function App() {
 
       <section className="toolbar">
         <div className="transport">
-          <button className="primary-button" onClick={togglePlay} disabled={!ready}>{playing ? <Pause size={16} /> : <Play size={16} />}{playing ? 'Pause' : 'Play'}</button>
+          <button className="primary-button" onClick={gameOver ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
           <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
           <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
         </div>
