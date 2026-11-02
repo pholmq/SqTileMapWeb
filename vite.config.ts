@@ -7,6 +7,7 @@ const isolationHeaders = {
 };
 
 export default defineConfig({
+  base: '/SqTileMapWeb/',
   plugins: [react()],
   publicDir: 'public',
   worker: { format: 'es' },

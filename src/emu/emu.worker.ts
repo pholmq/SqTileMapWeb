@@ -24,7 +24,8 @@ async function loadModule(message: ModuleMessage) {
   shared = message.shared;
   rangeStart = Math.floor(512 * workerIndex / workerCount);
   rangeEnd = Math.floor(512 * (workerIndex + 1) / workerCount);
-  const response = await fetch(shared ? '/z80-shared.wasm' : '/z80-single.wasm');
+  const base = import.meta.env.BASE_URL;
+  const response = await fetch(`${base}${shared ? 'z80-shared.wasm' : 'z80-single.wasm'}`);
   if (!response.ok) throw new Error(`Could not load Z80 WebAssembly module (${response.status})`);
   const bytes = await response.arrayBuffer();
   let result: WebAssembly.WebAssemblyInstantiatedSource;
