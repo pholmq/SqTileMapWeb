@@ -112,7 +112,12 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       const writeCount = Math.max(0, e.emu_debug_write_count() | 0);
       const writeCapacity = e.emu_debug_write_capacity() | 0;
       const writeBytes = Math.min(writeCount, writeCapacity) * 8;
-      const writes = heap.slice(e.emu_debug_write_ptr() >>> 0, (e.emu_debug_write_ptr() >>> 0) + writeBytes);
+      const writePointer = e.emu_debug_write_ptr() >>> 0;
+      const writes = new Uint8Array(writeBytes);
+      const firstRecord = writeCount > writeCapacity ? writeCount % writeCapacity : 0;
+      for (let i = 0; i < writeBytes; i++) {
+        writes[i] = heap[writePointer + ((firstRecord * 8 + i) % (writeCapacity * 8))];
+      }
       const result = {
         captureId: message.captureId,
         capturedAt: new Date().toISOString(),
