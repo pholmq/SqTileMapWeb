@@ -2,6 +2,18 @@ import { ChangeEvent, PointerEvent, WheelEvent, useCallback, useEffect, useMemo,
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair, Upload, RotateCcw } from 'lucide-react';
 import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
+const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
+  ShiftLeft: { row: 0, bit: 0 }, ShiftRight: { row: 0, bit: 0 },
+  KeyZ: { row: 0, bit: 1 }, KeyX: { row: 0, bit: 2 }, KeyC: { row: 0, bit: 3 }, KeyV: { row: 0, bit: 4 },
+  KeyA: { row: 1, bit: 0 }, KeyS: { row: 1, bit: 1 }, KeyD: { row: 1, bit: 2 }, KeyF: { row: 1, bit: 3 }, KeyG: { row: 1, bit: 4 },
+  KeyQ: { row: 2, bit: 0 }, KeyW: { row: 2, bit: 1 }, KeyE: { row: 2, bit: 2 }, KeyR: { row: 2, bit: 3 }, KeyT: { row: 2, bit: 4 },
+  Digit1: { row: 3, bit: 0 }, Digit2: { row: 3, bit: 1 }, Digit3: { row: 3, bit: 2 }, Digit4: { row: 3, bit: 3 }, Digit5: { row: 3, bit: 4 },
+  Digit0: { row: 4, bit: 0 }, Digit9: { row: 4, bit: 1 }, Digit8: { row: 4, bit: 2 }, Digit7: { row: 4, bit: 3 }, Digit6: { row: 4, bit: 4 },
+  KeyP: { row: 5, bit: 0 }, KeyO: { row: 5, bit: 1 }, KeyI: { row: 5, bit: 2 }, KeyU: { row: 5, bit: 3 }, KeyY: { row: 5, bit: 4 },
+  Enter: { row: 6, bit: 0 }, KeyL: { row: 6, bit: 1 }, KeyK: { row: 6, bit: 2 }, KeyJ: { row: 6, bit: 3 }, KeyH: { row: 6, bit: 4 },
+  Space: { row: 7, bit: 0 }, KeyM: { row: 7, bit: 2 }, KeyN: { row: 7, bit: 3 }, KeyB: { row: 7, bit: 4 },
+};
+
 type WorkerMessage =
   | { type: 'module-ready'; workerIndex: number; workerCount: number; shared: boolean; rangeStart: number; rangeEnd: number }
   | { type: 'ready'; roomCount: number; currentRoom: number }
@@ -59,7 +71,8 @@ export default function App() {
   const pressedCodesRef = useRef(new Set<string>());
   const captureActionRef = useRef<GameAction | null>(null);
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
-  const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean }>({ context: null, nextTime: 0, lastLevel: false });
+  const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
+  const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
@@ -81,6 +94,7 @@ export default function App() {
   const [poolReady, setPoolReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [currentRoom, setCurrentRoom] = useState(8);
+  const [visitedVersion, setVisitedVersion] = useState(0);
   const [fps, setFps] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
   const [roomCount, setRoomCount] = useState(512);
@@ -157,33 +171,56 @@ export default function App() {
     const existing = audioRef.current.context;
     if (existing) { void existing.resume(); return; }
     const context = new AudioContext();
-    audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false };
+    audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
     void context.resume();
   }
   function stopAudio() {
     const context = audioRef.current.context;
     if (context) void context.close();
-    audioRef.current = { context: null, nextTime: 0, lastLevel: false };
+    audioRef.current = { context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
   }
   function playBeeper(events: Uint32Array, last: number) {
     const audio = audioRef.current;
     const context = audio.context;
     if (!context) return;
+
+    // A room can need several emulated CPU frames to finish drawing. The
+    // cycle counter restarts for each one, so unwrap those timestamps here.
+    const eventCycles = new Float64Array(events.length);
+    let cycleOffset = 0;
+    let previousCycle = -1;
+    for (let i = 0; i < events.length; i++) {
+      const cycle = events[i] >>> 8;
+      if (previousCycle >= 0 && cycle + SPECTRUM_FRAME_CYCLES / 2 < previousCycle) {
+        cycleOffset += SPECTRUM_FRAME_CYCLES;
+      }
+      eventCycles[i] = cycle + cycleOffset;
+      previousCycle = cycle;
+    }
+
+    const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
     const sampleRate = context.sampleRate;
-    const sampleCount = Math.round(sampleRate / 50);
+    const sampleCount = Math.max(1, Math.round(sampleRate * totalCycles / 3500000));
     const frameDuration = sampleCount / sampleRate;
     const buffer = context.createBuffer(1, sampleCount, sampleRate);
     const samples = buffer.getChannelData(0);
     let level = audio.lastLevel;
     let eventIndex = 0;
-    let nextCycle = events.length ? (events[0] >>> 8) : Infinity;
+    let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
+    const sampleCycles = totalCycles / sampleCount;
+    const lowPassCoefficient = 1 - Math.exp(-2 * Math.PI * 4800 / sampleRate);
+    const highPassCoefficient = Math.exp(-2 * Math.PI * 35 / sampleRate);
+    let lowPass = audio.lowPass;
+    let previousInput = audio.previousInput;
+    let highPass = audio.highPass;
+
     for (let sample = 0; sample < sampleCount; sample++) {
-      const sampleStart = sample * SPECTRUM_FRAME_CYCLES / sampleCount;
-      const sampleEnd = (sample + 1) * SPECTRUM_FRAME_CYCLES / sampleCount;
+      const sampleStart = sample * sampleCycles;
+      const sampleEnd = (sample + 1) * sampleCycles;
       while (eventIndex < events.length && nextCycle <= sampleStart) {
         level = (events[eventIndex] & 0x10) !== 0;
         eventIndex++;
-        nextCycle = eventIndex < events.length ? (events[eventIndex] >>> 8) : Infinity;
+        nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
       }
       let cursor = sampleStart;
       let area = 0;
@@ -192,17 +229,25 @@ export default function App() {
         cursor = nextCycle;
         level = (events[eventIndex] & 0x10) !== 0;
         eventIndex++;
-        nextCycle = eventIndex < events.length ? (events[eventIndex] >>> 8) : Infinity;
+        nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
       }
       area += (sampleEnd - cursor) * (level ? 1 : -1);
-      samples[sample] = (area / (sampleEnd - sampleStart)) * 0.18;
+
+      const input = (area / sampleCycles) * 0.14;
+      lowPass += lowPassCoefficient * (input - lowPass);
+      highPass = lowPass - previousInput + highPassCoefficient * highPass;
+      previousInput = lowPass;
+      samples[sample] = highPass;
     }
+
     audio.lastLevel = (last & 0x10) !== 0;
+    audio.lowPass = lowPass;
+    audio.previousInput = previousInput;
+    audio.highPass = highPass;
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(context.destination);
-    let startAt = Math.max(context.currentTime + 0.005, audio.nextTime);
-    if (startAt > context.currentTime + 0.08) startAt = context.currentTime + 0.005;
+    const startAt = Math.max(context.currentTime + 0.004, audio.nextTime);
     source.start(startAt);
     audio.nextTime = startAt + frameDuration;
     source.onended = () => source.disconnect();
@@ -234,6 +279,8 @@ export default function App() {
     const previousRoom = currentRoomRef.current;
     if (message.currentRoom !== previousRoom) {
       currentRoomRef.current = message.currentRoom;
+      visitedRoomsRef.current[message.currentRoom] = true;
+      setVisitedVersion(version => version + 1);
       setCurrentRoom(message.currentRoom);
       centerRoomKeepZoom(message.currentRoom);
     }
@@ -270,7 +317,7 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom);
+      setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); visitedRoomsRef.current[message.currentRoom] = true; setVisitedVersion(version => version + 1);
       setStatus('Emulator initialised. Ready to play.');
       requestAnimationFrame(() => {
         const viewport = viewportRef.current;
@@ -401,17 +448,23 @@ export default function App() {
     const ctx = overlay?.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    ctx.strokeStyle = '#f7d66b'; ctx.lineWidth = 3;
+    ctx.lineWidth = 3;
+    for (let room = 0; room < 512; room++) {
+      if (!visitedRoomsRef.current[room] || room === currentRoom) continue;
+      ctx.strokeStyle = '#35d06f';
+      ctx.strokeRect((room % 16) * 256 + 1.5, Math.floor(room / 16) * 144 + 1.5, 253, 141);
+    }
+    ctx.strokeStyle = '#f7d66b';
     ctx.strokeRect(roomXY.x * 256 + 1.5, roomXY.y * 144 + 1.5, 253, 141);
-    ctx.fillStyle = 'rgba(247,214,107,.10)';
-    ctx.fillRect(roomXY.x * 256, roomXY.y * 144, 256, 144);
-  }, [roomXY]);
+  }, [roomXY, currentRoom, visitedVersion]);
 
   useEffect(() => {
     const publishKeys = () => {
       const rows = [...INITIAL_KEYS];
-      for (const binding of controlsRef.current) {
-        if (binding.code && pressedCodesRef.current.has(binding.code)) rows[binding.row] &= ~(1 << binding.bit);
+      for (const code of pressedCodesRef.current) {
+        const binding = controlsRef.current.find(item => item.code && item.code === code);
+        const position = binding ?? SPECTRUM_KEY_POSITIONS[code];
+        if (position) rows[position.row] &= ~(1 << position.bit);
       }
       keyRowsRef.current = rows;
       workersRef.current[0]?.postMessage({ type: 'keys', rows });
