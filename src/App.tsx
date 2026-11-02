@@ -1,6 +1,6 @@
 import { ChangeEvent, PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair, Upload, RotateCcw } from 'lucide-react';
-import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumRoom } from './spectrum';
+import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
 type WorkerMessage =
   | { type: 'module-ready'; workerIndex: number; workerCount: number; shared: boolean; rangeStart: number; rangeEnd: number }
@@ -12,6 +12,35 @@ type WorkerMessage =
 type Camera = { scale: number; x: number; y: number };
 type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number };
 const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
+type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
+type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
+const DEFAULT_CONTROLS: ControlBinding[] = [
+  { action: 'up', label: 'Up', code: 'KeyQ', row: 2, bit: 0 },
+  { action: 'down', label: 'Down / platform', code: 'KeyA', row: 1, bit: 0 },
+  { action: 'left', label: 'Left', code: 'KeyO', row: 5, bit: 1 },
+  { action: 'right', label: 'Right', code: 'KeyP', row: 5, bit: 0 },
+  { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 0 },
+];
+const CONTROL_STORAGE_KEY = 'starquake-controls-v1';
+function readControls(): ControlBinding[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
+    if (Array.isArray(saved)) return DEFAULT_CONTROLS.map(base => {
+      const match = saved.find((item: any) => item?.action === base.action && typeof item.code === 'string');
+      return match ? { ...base, code: match.code } : base;
+    });
+  } catch { /* Use defaults when saved settings are unavailable. */ }
+  return DEFAULT_CONTROLS.map(control => ({ ...control }));
+}
+function formatControlKey(code: string) {
+  if (!code) return '—';
+  if (code === 'Space') return 'SPACE';
+  if (code.startsWith('Key')) return code.slice(3).toUpperCase();
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('Numpad')) return 'NUM ' + code.slice(6);
+  const names: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: 'ENTER', Escape: 'ESC', ShiftLeft: 'LEFT SHIFT', ShiftRight: 'RIGHT SHIFT' };
+  return names[code] || code.toUpperCase();
+}
 
 export default function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -24,6 +53,9 @@ export default function App() {
   const cameraRef = useRef<Camera>({ scale: 0.15, x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
   const keyRowsRef = useRef<number[]>([...INITIAL_KEYS]);
+  const pressedCodesRef = useRef(new Set<string>());
+  const captureActionRef = useRef<GameAction | null>(null);
+  const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const audioRef = useRef<{ context: AudioContext | null; oscillator: OscillatorNode | null; gain: GainNode | null }>({ context: null, oscillator: null, gain: null });
   const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
@@ -34,6 +66,7 @@ export default function App() {
   const frameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playingRef = useRef(false);
   const fpsCounterRef = useRef({ started: 0, frames: 0 });
+  const telemetryUpdateRef = useRef(0);
   const soundOnRef = useRef(true);
   const backgroundDivisorRef = useRef(5);
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
@@ -52,6 +85,10 @@ export default function App() {
   const [backgroundDivisor, setBackgroundDivisor] = useState(5);
   const [romName, setRomName] = useState('');
   const [snapshotName, setSnapshotName] = useState('No snapshot loaded');
+  const [controls, setControls] = useState<ControlBinding[]>(readControls);
+  const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
+  const controlsRef = useRef(controls);
+  controlsRef.current = controls;
 
   soundOnRef.current = soundOn;
   backgroundDivisorRef.current = backgroundDivisor;
@@ -76,6 +113,23 @@ export default function App() {
     const scale = Math.min(viewport.clientWidth / 256, viewport.clientHeight / 144) * 0.88;
     applyCamera({ scale, x: (viewport.clientWidth - 256 * scale) / 2 - (targetRoom % 16) * 256 * scale, y: (viewport.clientHeight - 144 * scale) / 2 - Math.floor(targetRoom / 16) * 144 * scale });
   }, [applyCamera]);
+
+  const centerRoomKeepZoom = useCallback((room: number) => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const c = cameraRef.current;
+    const roomCenterX = (room % 16) * 256 + 128;
+    const roomCenterY = Math.floor(room / 16) * 144 + 72;
+    applyCamera({
+      ...c,
+      x: viewport.clientWidth / 2 - roomCenterX * c.scale,
+      y: viewport.clientHeight / 2 - roomCenterY * c.scale,
+    });
+  }, [applyCamera]);
+
+  useEffect(() => {
+    try { localStorage.setItem(CONTROL_STORAGE_KEY, JSON.stringify(controls)); } catch { /* Storage may be unavailable. */ }
+  }, [controls]);
 
   function startAudio() {
     if (audioRef.current.context) return;
@@ -110,11 +164,15 @@ export default function App() {
     const ctx = canvas?.getContext('2d', { alpha: false });
     if (ctx) {
       const flashPhase = ((Math.floor(performance.now() / 320) & 1) === 1);
-      for (const item of message.dirty) screenCacheRef.current[item.room] = new Uint8Array(item.screen);
+      for (const item of message.dirty) {
+        const screen = new Uint8Array(item.screen);
+        screenCacheRef.current[item.room] = screen;
+        flashRoomsRef.current[item.room] = spectrumScreenHasFlash(screen);
+      }
       if (flashPhase !== lastFlashPhaseRef.current) {
         for (let room = 0; room < screenCacheRef.current.length; room++) {
           const screen = screenCacheRef.current[room];
-          if (screen) paintSpectrumRoom(ctx, room, screen, flashPhase);
+          if (screen && flashRoomsRef.current[room]) paintSpectrumRoom(ctx, room, screen, flashPhase);
         }
         lastFlashPhaseRef.current = flashPhase;
       } else {
@@ -124,8 +182,12 @@ export default function App() {
         }
       }
     }
-    currentRoomRef.current = message.currentRoom;
-    setCurrentRoom(message.currentRoom);
+    const previousRoom = currentRoomRef.current;
+    if (message.currentRoom !== previousRoom) {
+      currentRoomRef.current = message.currentRoom;
+      setCurrentRoom(message.currentRoom);
+      centerRoomKeepZoom(message.currentRoom);
+    }
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
     const now = performance.now();
     const counter = fpsCounterRef.current;
@@ -136,7 +198,7 @@ export default function App() {
       counter.frames = 0;
       counter.started = now;
     }
-  }, []);
+  }, [centerRoomKeepZoom]);
 
   const beginFrame = useCallback(() => {
     const workers = workersRef.current;
@@ -194,7 +256,10 @@ export default function App() {
       if (frame.collectDone.size === workers.length) {
         const elapsed = performance.now() - frame.started;
         drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom });
-        setFrameMs(elapsed);
+        if (performance.now() - telemetryUpdateRef.current >= 250) {
+          setFrameMs(elapsed);
+          telemetryUpdateRef.current = performance.now();
+        }
         frameStateRef.current = null;
         if (playingRef.current) {
           const delay = Math.max(0, 20 - elapsed);
@@ -285,32 +350,75 @@ export default function App() {
   }, [roomXY]);
 
   useEffect(() => {
+    const publishKeys = () => {
+      const rows = [...INITIAL_KEYS];
+      for (const binding of controlsRef.current) {
+        if (binding.code && pressedCodesRef.current.has(binding.code)) rows[binding.row] &= ~(1 << binding.bit);
+      }
+      keyRowsRef.current = rows;
+      workersRef.current[0]?.postMessage({ type: 'keys', rows });
+    };
     const onKey = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      if (['q', 'a', 'o', 'p', ' '].includes(key)) {
+      const pending = captureActionRef.current;
+      if (pending) {
         event.preventDefault();
-        const mapping: Record<string, [number, number]> = { q: [2, 0], a: [1, 0], o: [5, 1], p: [5, 0], ' ': [7, 0] };
-        const [row, bit] = mapping[key]; keyRowsRef.current[row] &= ~(1 << bit);
-        workersRef.current[0]?.postMessage({ type: 'keys', rows: keyRowsRef.current });
+        event.stopPropagation();
+        if (event.code === 'Escape') {
+          captureActionRef.current = null;
+          setCapturingAction(null);
+          return;
+        }
+        if (['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(event.code)) return;
+        setControls(current => current.map(binding => {
+          if (binding.action === pending) return { ...binding, code: event.code };
+          if (binding.code === event.code) return { ...binding, code: '' };
+          return binding;
+        }));
+        captureActionRef.current = null;
+        setCapturingAction(null);
+        pressedCodesRef.current.clear();
+        publishKeys();
+        return;
+      }
+
+      const binding = controlsRef.current.find(item => item.code && item.code === event.code);
+      if (binding) {
+        event.preventDefault();
+        pressedCodesRef.current.add(event.code);
+        publishKeys();
+        return;
       }
       if (event.repeat) return;
+      const key = event.key.toLowerCase();
       if (key === 'home') { event.preventDefault(); focusRoom(); }
       if (key === 'end') { event.preventDefault(); fitMap(); }
       if (key === '+' || key === '=') zoomAtCentre(1.25);
       if (key === '-' || key === '_') zoomAtCentre(0.8);
       if (key.startsWith('arrow')) {
-        event.preventDefault(); const step = event.shiftKey ? 10 : 80; const c = cameraRef.current;
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 80;
+        const c = cameraRef.current;
         applyCamera({ ...c, x: c.x + (key === 'arrowleft' ? step : key === 'arrowright' ? -step : 0), y: c.y + (key === 'arrowup' ? step : key === 'arrowdown' ? -step : 0) });
       }
     };
     const onKeyUp = (event: KeyboardEvent) => {
-      const key = event.key.toLowerCase();
-      const mapping: Record<string, [number, number]> = { q: [2, 0], a: [1, 0], o: [5, 1], p: [5, 0], ' ': [7, 0] };
-      const pair = mapping[key];
-      if (pair) { keyRowsRef.current[pair[0]] |= (1 << pair[1]); workersRef.current[0]?.postMessage({ type: 'keys', rows: keyRowsRef.current }); }
+      if (captureActionRef.current) return;
+      if (pressedCodesRef.current.delete(event.code)) publishKeys();
     };
-    window.addEventListener('keydown', onKey); window.addEventListener('keyup', onKeyUp);
-    return () => { window.removeEventListener('keydown', onKey); window.removeEventListener('keyup', onKeyUp); };
+    const clearPressed = () => {
+      if (pressedCodesRef.current.size) {
+        pressedCodesRef.current.clear();
+        publishKeys();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', clearPressed);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', clearPressed);
+    };
   }, [applyCamera, fitMap, focusRoom]);
 
   const zoomAt = (x: number, y: number, factor: number) => {
@@ -397,7 +505,25 @@ export default function App() {
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
           <div className="active-room-card"><div className="room-label">ACTIVE ROOM</div><div className="room-number">{currentRoom.toString().padStart(3, '0')}</div><div className="room-coordinates">COLUMN {roomXY.x + 1} / 16 <i /> ROW {roomXY.y + 1} / 32</div></div>
           <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>{50 / backgroundDivisor} Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
-          <div className="panel-section"><h3>CONTROLS</h3><div className="control-row"><kbd>Q</kbd><span>Up</span><kbd>O</kbd><span>Left</span></div><div className="control-row"><kbd>A</kbd><span>Down / platform</span><kbd>P</kbd><span>Right</span></div><div className="control-row"><kbd>SPACE</kbd><span>Fire</span></div><div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div><div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div></div>
+          <div className="panel-section">
+            <h3>CONTROLS <span className="control-hint">DOUBLE-CLICK A KEY TO CHANGE</span></h3>
+            <div className="controls-config">
+              {controls.map(binding => (
+                <div className="config-control" key={binding.action}>
+                  <span>{binding.label}</span>
+                  <button
+                    type="button"
+                    className={`key-bind ${capturingAction === binding.action ? 'capturing' : ''}`}
+                    onDoubleClick={() => { captureActionRef.current = binding.action; setCapturingAction(binding.action); }}
+                    title="Double-click, then press the key you want to assign"
+                  >{capturingAction === binding.action ? 'PRESS KEY…' : formatControlKey(binding.code)}</button>
+                </div>
+              ))}
+            </div>
+            <p className="control-help">{capturingAction ? 'Press a key to assign it. Press Escape to cancel.' : 'Double-click any key label, then press a new key.'}</p>
+            <div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div>
+            <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
+          </div>
           <div className="panel-footer">TileMap-style room emulation · Z80 WebAssembly · GPL-3.0</div>
         </aside>
       </section>
