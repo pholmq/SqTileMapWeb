@@ -24,9 +24,9 @@ type WorkerMessage =
   | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeTraceAvailable: boolean; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
-  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; audioOverflow: boolean };
+  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
 type Camera = { scale: number; x: number; y: number };
-type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number };
+type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean };
 const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
 type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
@@ -37,7 +37,7 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'right', label: 'Right', code: 'KeyD', row: 5, bit: 0 },
   { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 2 },
 ];
-const ROOM_FOCUS_DURATION_MS = 700;
+const ROOM_FOCUS_DURATION_MS = 1150;
 const DEFAULT_ZOOM_SCALE = 2.11;
 const SPECTRUM_FRAME_CYCLES = 70000;
 const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
@@ -76,6 +76,7 @@ export default function App() {
   const captureActionRef = useRef<GameAction | null>(null);
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
+  const visitedAtRef = useRef<number[]>(Array(512).fill(0));
   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
@@ -99,6 +100,7 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [poolReady, setPoolReady] = useState(false);
   const [playing, setPlaying] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
   const [currentRoom, setCurrentRoom] = useState(8);
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [fps, setFps] = useState(0);
@@ -287,11 +289,20 @@ export default function App() {
     if (message.currentRoom !== previousRoom) {
       currentRoomRef.current = message.currentRoom;
       if (hasStartedRef.current) {
-        visitedRoomsRef.current[message.currentRoom] = true;
-        setVisitedVersion(version => version + 1);
+        if (!visitedRoomsRef.current[previousRoom]) {
+          visitedRoomsRef.current[previousRoom] = true;
+          visitedAtRef.current[previousRoom] = performance.now();
+          setVisitedVersion(version => version + 1);
+        }
       }
       setCurrentRoom(message.currentRoom);
       centerRoomKeepZoom(message.currentRoom);
+    }
+    if (message.gameOver) {
+      playingRef.current = false;
+      setPlaying(false);
+      setGameOver(true);
+      setStatus('Game over · all lives lost');
     }
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
     const now = performance.now();
@@ -309,7 +320,7 @@ export default function App() {
     const workers = workersRef.current;
     if (!playingRef.current || !workers.length || frameStateRef.current) return;
     const id = ++frameIdRef.current;
-    frameStateRef.current = { id, phase: 'begin', started: performance.now(), tickDone: new Set(), collectDone: new Set(), dirty: [], audioEvents: new Uint32Array(0), audioLast: 0, currentRoom: currentRoomRef.current };
+    frameStateRef.current = { id, phase: 'begin', started: performance.now(), tickDone: new Set(), collectDone: new Set(), dirty: [], audioEvents: new Uint32Array(0), audioLast: 0, currentRoom: currentRoomRef.current, gameOver: false };
     workers[0].postMessage({ type: 'begin', frameId: id });
   }, []);
 
@@ -370,7 +381,7 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
+      setReady(true); setGameOver(false); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); setVisitedVersion(version => version + 1);
       setStatus('Emulator initialised. Ready to play.');
       requestAnimationFrame(() => {
         const viewport = viewportRef.current;
@@ -410,9 +421,10 @@ export default function App() {
       frame.dirty.push(...message.dirty);
       if (message.workerIndex === 0) { frame.audioEvents = message.audioEvents; frame.audioLast = message.audioLast; }
       frame.currentRoom = message.currentRoom;
+      frame.gameOver = frame.gameOver || message.gameOver;
       if (frame.collectDone.size === workers.length) {
         const elapsed = performance.now() - frame.started;
-        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom });
+        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
         if (performance.now() - telemetryUpdateRef.current >= 250) {
           setFrameMs(elapsed);
           telemetryUpdateRef.current = performance.now();
@@ -500,13 +512,24 @@ export default function App() {
     const overlay = overlayRef.current;
     const ctx = overlay?.getContext('2d');
     if (!ctx) return;
-    ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
-    ctx.lineWidth = 3;
-    for (let room = 0; room < 512; room++) {
-      if (!visitedRoomsRef.current[room] || room === currentRoom) continue;
-      ctx.fillStyle = 'rgba(190,200,215,.10)';
-      ctx.fillRect((room % 16) * 256, Math.floor(room / 16) * 144, 256, 144);
-    }
+    const fadeDuration = 900;
+    let animation = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+      const now = performance.now();
+      let fading = false;
+      for (let room = 0; room < 512; room++) {
+        if (!visitedRoomsRef.current[room] || room === currentRoom) continue;
+        const started = visitedAtRef.current[room] || now;
+        const progress = Math.min(1, Math.max(0, (now - started) / fadeDuration));
+        if (progress < 1) fading = true;
+        ctx.fillStyle = `rgba(190,200,215,${0.10 * progress})`;
+        ctx.fillRect((room % 16) * 256, Math.floor(room / 16) * 144, 256, 144);
+      }
+      if (fading) animation = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(animation);
   }, [roomXY, currentRoom, visitedVersion]);
 
   useEffect(() => {
@@ -634,13 +657,13 @@ export default function App() {
   };
 
   const togglePlay = () => {
-    if (!ready) return;
+    if (!ready || gameOver) return;
     if (playingRef.current) {
       playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
     } else {
       if (!hasStartedRef.current) {
         visitedRoomsRef.current.fill(false);
-        visitedRoomsRef.current[currentRoomRef.current] = true;
+        visitedAtRef.current.fill(0);
         setVisitedVersion(version => version + 1);
         hasStartedRef.current = true;
       }
@@ -676,7 +699,7 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum</h1><p>{ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
+          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">{gameOver ? 'GAME OVER' : '512 ROOMS · 16 × 32'}</div><h1>{gameOver ? 'Game Over' : 'Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum'}</h1><p>{gameOver ? 'All lives have been lost.' : ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready || gameOver}><Play size={17} />{gameOver ? 'Game over' : hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
