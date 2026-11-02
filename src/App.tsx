@@ -23,7 +23,7 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
 ];
 const ROOM_FOCUS_DURATION_MS = 700;
 const SPECTRUM_FRAME_CYCLES = 70000;
-const CONTROL_STORAGE_KEY = 'starquake-controls-v2';
+const CONTROL_STORAGE_KEY = 'starquake-controls-v3';
 function readControls(): ControlBinding[] {
   try {
     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
