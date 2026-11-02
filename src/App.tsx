@@ -522,7 +522,7 @@ export default function App() {
       const rows = [...INITIAL_KEYS];
       for (const code of pressedCodesRef.current) {
         const binding = controlsRef.current.find(item => item.code && item.code === code);
-        const positions = [binding, SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
+        const positions = binding ? [binding] : [SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
         for (const position of positions) rows[position.row] &= ~(1 << position.bit);
       }
       keyRowsRef.current = rows;
@@ -636,7 +636,8 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.svg`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
-        <div className="top-status"><span className={`status-dot ${playing ? 'live' : ready ? 'ready' : ''}`} />{status}</div>
+        <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
+        <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
       </header>
 
       <section className="toolbar">
@@ -647,13 +648,11 @@ export default function App() {
         </div>
         <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
         <div className="toolbar-spacer" />
-        <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
       </section>
 
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
         </div>
         <aside className="side-panel">
           <div className="panel-section">
