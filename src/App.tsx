@@ -15,15 +15,16 @@ const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
 type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
 const DEFAULT_CONTROLS: ControlBinding[] = [
-  { action: 'up', label: 'Up', code: 'KeyW', row: 2, bit: 1 },
-  { action: 'down', label: 'Down / platform', code: 'KeyS', row: 1, bit: 1 },
-  { action: 'left', label: 'Left', code: 'KeyA', row: 1, bit: 0 },
-  { action: 'right', label: 'Right', code: 'KeyD', row: 1, bit: 2 },
-  { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 0 },
+  { action: 'up', label: 'Up', code: 'KeyW', row: 2, bit: 0 },
+  { action: 'down', label: 'Down / platform', code: 'KeyS', row: 1, bit: 0 },
+  { action: 'left', label: 'Left', code: 'KeyA', row: 5, bit: 1 },
+  { action: 'right', label: 'Right', code: 'KeyD', row: 5, bit: 0 },
+  { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 2 },
 ];
 const ROOM_FOCUS_DURATION_MS = 700;
+const DEFAULT_ZOOM_SCALE = 2.11;
 const SPECTRUM_FRAME_CYCLES = 70000;
-const CONTROL_STORAGE_KEY = 'starquake-controls-v3';
+const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
 function readControls(): ControlBinding[] {
   try {
     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
@@ -52,7 +53,7 @@ export default function App() {
   const workerCountRef = useRef(1);
   const poolReadyRef = useRef(false);
   const moduleReadyRef = useRef(new Set<number>());
-  const cameraRef = useRef<Camera>({ scale: 0.15, x: 0, y: 0 });
+  const cameraRef = useRef<Camera>({ scale: DEFAULT_ZOOM_SCALE, x: 0, y: 0 });
   const dragRef = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
   const keyRowsRef = useRef<number[]>([...INITIAL_KEYS]);
   const pressedCodesRef = useRef(new Set<string>());
@@ -271,7 +272,15 @@ export default function App() {
     if (message.type === 'ready') {
       setReady(true); setRoomCount(message.roomCount); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom);
       setStatus('Emulator initialised. Ready to play.');
-      requestAnimationFrame(() => fitMap());
+      requestAnimationFrame(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const scale = DEFAULT_ZOOM_SCALE;
+        const room = message.currentRoom;
+        const roomCenterX = (room % 16) * 256 + 128;
+        const roomCenterY = Math.floor(room / 16) * 144 + 72;
+        applyCamera({ scale, x: viewport.clientWidth / 2 - roomCenterX * scale, y: viewport.clientHeight / 2 - roomCenterY * scale });
+      });
       return;
     }
     const frame = frameStateRef.current;
@@ -315,7 +324,7 @@ export default function App() {
         }
       }
     }
-  }, [beginFrame, drawFrame, fitMap]);
+  }, [beginFrame, drawFrame, fitMap, applyCamera]);
 
   useEffect(() => {
     moduleReadyRef.current.clear(); poolReadyRef.current = false; setPoolReady(false);
@@ -538,7 +547,7 @@ export default function App() {
           <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
           <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
         </div>
-        <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button><button className="icon-button" title="Reset view" onClick={fitMap}><RotateCcw size={15} /></button></div>
+        <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button><button className="icon-button" title="Reset view" onClick={fitMap}><RotateCcw size={15} /></button></div>
         <div className="toolbar-spacer" />
         <label className="rate-control">BACKGROUND <select value={backgroundDivisor} onChange={(e: ChangeEvent<HTMLSelectElement>) => setBackgroundDivisor(Number(e.target.value))}><option value={5}>10 Hz</option><option value={2}>25 Hz</option><option value={1}>50 Hz · full</option></select></label>
         <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
