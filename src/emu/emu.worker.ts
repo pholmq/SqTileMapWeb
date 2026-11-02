@@ -107,34 +107,35 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       collect(message.frameId);
     } else if (message.type === 'debug-capture' && wasm && memory) {
       const e = wasm as Record<string, any>;
-      const debugExports = ['emu_debug_ram_ptr', 'emu_debug_pc', 'emu_debug_sp', 'emu_debug_write_ptr', 'emu_debug_write_count', 'emu_debug_write_capacity', 'emu_debug_clear_writes'];
-      if (debugExports.some(name => typeof e[name] !== 'function')) {
-        scope.postMessage({ type: 'debug-error', message: 'Diagnostic support is not compiled into the current WebAssembly module. Run npm run build:wasm and rebuild the app.' });
-        return;
-      }
       const heap = new Uint8Array(memory.buffer);
-      const ram = heap.slice(e.emu_debug_ram_ptr() >>> 0, (e.emu_debug_ram_ptr() >>> 0) + 49152);
-      const writeCount = Math.max(0, e.emu_debug_write_count() | 0);
-      const writeCapacity = e.emu_debug_write_capacity() | 0;
+      const room = e.emu_current_room() | 0;
+      const hasWriteTrace = ['emu_debug_ram_ptr', 'emu_debug_pc', 'emu_debug_sp', 'emu_debug_write_ptr', 'emu_debug_write_count', 'emu_debug_write_capacity', 'emu_debug_clear_writes'].every(name => typeof e[name] === 'function');
+      const ramPointer = (hasWriteTrace ? e.emu_debug_ram_ptr() : e.emu_screen_ptr(room)) >>> 0;
+      const ram = heap.slice(ramPointer, ramPointer + 49152);
+      const writeCount = hasWriteTrace ? Math.max(0, e.emu_debug_write_count() | 0) : 0;
+      const writeCapacity = hasWriteTrace ? e.emu_debug_write_capacity() | 0 : 0;
       const writeBytes = Math.min(writeCount, writeCapacity) * 8;
-      const writePointer = e.emu_debug_write_ptr() >>> 0;
       const writes = new Uint8Array(writeBytes);
-      const firstRecord = writeCount > writeCapacity ? writeCount % writeCapacity : 0;
-      for (let i = 0; i < writeBytes; i++) {
-        writes[i] = heap[writePointer + ((firstRecord * 8 + i) % (writeCapacity * 8))];
+      if (hasWriteTrace && writeCapacity > 0) {
+        const writePointer = e.emu_debug_write_ptr() >>> 0;
+        const firstRecord = writeCount > writeCapacity ? writeCount % writeCapacity : 0;
+        for (let i = 0; i < writeBytes; i++) {
+          writes[i] = heap[writePointer + ((firstRecord * 8 + i) % (writeCapacity * 8))];
+        }
       }
       const result = {
         captureId: message.captureId,
         capturedAt: new Date().toISOString(),
-        room: e.emu_current_room() | 0,
-        pc: e.emu_debug_pc() & 0xffff,
-        sp: e.emu_debug_sp() & 0xffff,
+        room,
+        pc: (hasWriteTrace ? e.emu_debug_pc() : e.emu_room_pc(room)) & 0xffff,
+        sp: (hasWriteTrace ? e.emu_debug_sp() : e.emu_room_sp(room)) & 0xffff,
+        writeTraceAvailable: hasWriteTrace,
         writeCount,
         writeCapacity,
         ram: ram.buffer,
         writes: writes.buffer,
       };
-      e.emu_debug_clear_writes();
+      if (hasWriteTrace) e.emu_debug_clear_writes();
       scope.postMessage({ type: 'debug-captured', ...result }, [ram.buffer, writes.buffer]);
     } else if (message.type === 'stop') {
       scope.close();
