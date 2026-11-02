@@ -19,7 +19,7 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'down', label: 'Down / platform', code: 'KeyA', row: 1, bit: 0 },
   { action: 'left', label: 'Left', code: 'KeyO', row: 5, bit: 1 },
   { action: 'right', label: 'Right', code: 'KeyP', row: 5, bit: 0 },
-  { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 0 },
+  { action: 'fire', label: 'Fire', code: 'KeyM', row: 7, bit: 2 },
 ];
 const CONTROL_STORAGE_KEY = 'starquake-controls-v1';
 function readControls(): ControlBinding[] {
@@ -70,6 +70,8 @@ export default function App() {
   const soundOnRef = useRef(true);
   const backgroundDivisorRef = useRef(5);
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
+  const [cameraSmoothing, setCameraSmoothing] = useState(false);
+  const cameraTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [status, setStatus] = useState('Preparing browser emulator…');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -120,11 +122,17 @@ export default function App() {
     const c = cameraRef.current;
     const roomCenterX = (room % 16) * 256 + 128;
     const roomCenterY = Math.floor(room / 16) * 144 + 72;
+    setCameraSmoothing(true);
+    if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
     applyCamera({
       ...c,
       x: viewport.clientWidth / 2 - roomCenterX * c.scale,
       y: viewport.clientHeight / 2 - roomCenterY * c.scale,
     });
+    cameraTransitionTimerRef.current = setTimeout(() => {
+      setCameraSmoothing(false);
+      cameraTransitionTimerRef.current = null;
+    }, 360);
   }, [applyCamera]);
 
   useEffect(() => {
@@ -286,6 +294,7 @@ export default function App() {
     return () => {
       if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
       workers.forEach(worker => { worker.postMessage({ type: 'stop' }); worker.terminate(); });
+      if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
       workersRef.current = []; stopAudio();
     };
   }, [handleWorkerMessage]);
@@ -356,7 +365,7 @@ export default function App() {
         if (binding.code && pressedCodesRef.current.has(binding.code)) rows[binding.row] &= ~(1 << binding.bit);
       }
       keyRowsRef.current = rows;
-      workersRef.current[0]?.postMessage({ type: 'keys', rows });
+      for (const worker of workersRef.current) worker.postMessage({ type: 'keys', rows });
     };
     const onKey = (event: KeyboardEvent) => {
       const pending = captureActionRef.current;
@@ -411,12 +420,12 @@ export default function App() {
         publishKeys();
       }
     };
-    window.addEventListener('keydown', onKey);
-    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', clearPressed);
     return () => {
-      window.removeEventListener('keydown', onKey);
-      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', clearPressed);
     };
   }, [applyCamera, fitMap, focusRoom]);
@@ -498,7 +507,7 @@ export default function App() {
 
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-          <div className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+          <div className={`world ${cameraSmoothing ? 'smooth' : ''}`} style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
           {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>The bundled Starquake snapshot and Spectrum ROM are loaded automatically to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
         </div>
         <aside className="side-panel">
@@ -506,21 +515,24 @@ export default function App() {
           <div className="active-room-card"><div className="room-label">ACTIVE ROOM</div><div className="room-number">{currentRoom.toString().padStart(3, '0')}</div><div className="room-coordinates">COLUMN {roomXY.x + 1} / 16 <i /> ROW {roomXY.y + 1} / 32</div></div>
           <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>{50 / backgroundDivisor} Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
           <div className="panel-section">
-            <h3>CONTROLS <span className="control-hint">DOUBLE-CLICK A KEY TO CHANGE</span></h3>
+            <h3>CONTROLS <span className="control-hint">CUSTOMISE KEY BINDINGS</span></h3>
             <div className="controls-config">
               {controls.map(binding => (
                 <div className="config-control" key={binding.action}>
-                  <span>{binding.label}</span>
+                  <span className="control-action">{binding.label}</span>
+                  <kbd className="key-value">{capturingAction === binding.action ? 'PRESS KEY…' : formatControlKey(binding.code)}</kbd>
                   <button
                     type="button"
-                    className={`key-bind ${capturingAction === binding.action ? 'capturing' : ''}`}
-                    onDoubleClick={() => { captureActionRef.current = binding.action; setCapturingAction(binding.action); }}
-                    title="Double-click, then press the key you want to assign"
-                  >{capturingAction === binding.action ? 'PRESS KEY…' : formatControlKey(binding.code)}</button>
+                    className={`edit-bind ${capturingAction === binding.action ? 'capturing' : ''}`}
+                    onClick={() => {
+                      captureActionRef.current = binding.action;
+                      setCapturingAction(binding.action);
+                    }}
+                  >{capturingAction === binding.action ? 'WAITING' : 'Edit'}</button>
                 </div>
               ))}
             </div>
-            <p className="control-help">{capturingAction ? 'Press a key to assign it. Press Escape to cancel.' : 'Double-click any key label, then press a new key.'}</p>
+            <p className="control-help">{capturingAction ? 'Press the new key. Press Escape to cancel.' : 'Select Edit, then press the key to assign.'}</p>
             <div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div>
             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
           </div>
