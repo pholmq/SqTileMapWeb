@@ -85,7 +85,6 @@ static void clone_room(Room *from, Room *to) {
 static int clone_room_for_entry(Room *from, Room *to, uint16_t room) {
   if (from==to) return 0;
   lock_room(to);
-  if(to->visited) { unlock_room(to); return 0; }
   copy_bytes(to->mem,from->mem,65536);
   to->cpu.state=from->cpu.state;
   poke16(to,0xd2c8,room);
