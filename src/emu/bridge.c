@@ -175,7 +175,7 @@ static void on_hook(void *ctx, uint16_t address) {
       if(is_active(r) && new_room<ROOM_COUNT && new_room!=r->room) {
         Room *next=&rooms[new_room];
         r->visited=1;
-        /* Seed a room only on its first visit; revisits keep their own CPU and RAM. */
+        /* Transfer the live CPU/RAM state, then pause this source CPU for the frame. */
         clone_room_for_entry(r,next,new_room);
         r->transitioned=1;
         __atomic_store_n(&transition_room,(int)new_room,__ATOMIC_SEQ_CST);
