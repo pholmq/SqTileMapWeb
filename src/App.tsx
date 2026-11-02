@@ -8,9 +8,11 @@ const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
   KeyA: { row: 1, bit: 0 }, KeyS: { row: 1, bit: 1 }, KeyD: { row: 1, bit: 2 }, KeyF: { row: 1, bit: 3 }, KeyG: { row: 1, bit: 4 },
   KeyQ: { row: 2, bit: 0 }, KeyW: { row: 2, bit: 1 }, KeyE: { row: 2, bit: 2 }, KeyR: { row: 2, bit: 3 }, KeyT: { row: 2, bit: 4 },
   Digit1: { row: 3, bit: 0 }, Digit2: { row: 3, bit: 1 }, Digit3: { row: 3, bit: 2 }, Digit4: { row: 3, bit: 3 }, Digit5: { row: 3, bit: 4 },
+  Numpad1: { row: 3, bit: 0 }, Numpad2: { row: 3, bit: 1 }, Numpad3: { row: 3, bit: 2 }, Numpad4: { row: 3, bit: 3 }, Numpad5: { row: 3, bit: 4 },
   Digit0: { row: 4, bit: 0 }, Digit9: { row: 4, bit: 1 }, Digit8: { row: 4, bit: 2 }, Digit7: { row: 4, bit: 3 }, Digit6: { row: 4, bit: 4 },
+  Numpad0: { row: 4, bit: 0 }, Numpad9: { row: 4, bit: 1 }, Numpad8: { row: 4, bit: 2 }, Numpad7: { row: 4, bit: 3 }, Numpad6: { row: 4, bit: 4 },
   KeyP: { row: 5, bit: 0 }, KeyO: { row: 5, bit: 1 }, KeyI: { row: 5, bit: 2 }, KeyU: { row: 5, bit: 3 }, KeyY: { row: 5, bit: 4 },
-  Enter: { row: 6, bit: 0 }, KeyL: { row: 6, bit: 1 }, KeyK: { row: 6, bit: 2 }, KeyJ: { row: 6, bit: 3 }, KeyH: { row: 6, bit: 4 },
+  Enter: { row: 6, bit: 0 }, NumpadEnter: { row: 6, bit: 0 }, KeyL: { row: 6, bit: 1 }, KeyK: { row: 6, bit: 2 }, KeyJ: { row: 6, bit: 3 }, KeyH: { row: 6, bit: 4 },
   Space: { row: 7, bit: 0 }, KeyM: { row: 7, bit: 2 }, KeyN: { row: 7, bit: 3 }, KeyB: { row: 7, bit: 4 },
 };
 
@@ -457,8 +459,6 @@ export default function App() {
       ctx.fillStyle = 'rgba(190,200,215,.10)';
       ctx.fillRect((room % 16) * 256, Math.floor(room / 16) * 144, 256, 144);
     }
-    ctx.strokeStyle = '#f7d66b';
-    ctx.strokeRect(roomXY.x * 256 + 1.5, roomXY.y * 144 + 1.5, 253, 141);
   }, [roomXY, currentRoom, visitedVersion]);
 
   useEffect(() => {
@@ -621,8 +621,7 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          {!ready && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake, room by room.</h1><p>The bundled Starquake snapshot and Spectrum ROM are loaded automatically to initialise the complete TileMap.</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div></div>}
-          {ready && !playing && <div className="start-screen"><div className="empty-chip">STARQUAKE · 48K</div><h1>{hasStartedRef.current ? 'Game paused.' : 'Ready to play?'}</h1><p>{hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.'}</p><button className="primary-button start-play-button" onClick={togglePlay}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
+          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum</h1><p>{ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onClick={togglePlay} disabled={!ready}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
