@@ -310,7 +310,10 @@ export default function App() {
     }
     const hud = hudCanvasRef.current?.getContext('2d');
     const activeScreen = screenCacheRef.current[message.currentRoom];
-    if (hud && activeScreen) paintSpectrumHud(hud, activeScreen);
+    if (hud) {
+      if (activeScreen) paintSpectrumHud(hud, activeScreen);
+      else hud.clearRect(0, 0, 256, 48);
+    }
     if (message.gameOver) {
       playingRef.current = false;
       setPlaying(false);
