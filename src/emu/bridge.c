@@ -355,8 +355,8 @@ int emu_player_on_teleporter(void) {
       int small_platform=m[0x9840+(big_platform*4)+sub_slot];
       if((m[0x9740+small_platform]>>4)!=0x0d) continue;
 
-      int x0=(screen_slot%4)*64+(sub_slot%2)*32;
-      int y0=48+(screen_slot/4)*48+(sub_slot/2)*24;
+      int x0=(screen_slot%4)*64+((sub_slot==0 || sub_slot==2)?32:0);
+      int y0=48+(screen_slot/4)*48+(sub_slot<2?24:0);
       if(player_x>=x0 && player_x<x0+32 && player_y>=y0 && player_y<y0+24) return 1;
     }
   }
