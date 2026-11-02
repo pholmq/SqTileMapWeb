@@ -27,6 +27,7 @@ static uint8_t key_matrix[8] = {255,255,255,255,255,255,255,255};
 static int initialized = 0;
 static int hook_error = 0;
 static int cheat_mode = 0;
+static int game_over = 0;
 static uint8_t *snapshot_mem;
 static uint8_t base_mem[65536];
 static ZZ80State snapshot_cpu;
@@ -46,8 +47,8 @@ typedef struct {
 static DebugWrite debug_writes[DEBUG_WRITE_CAPACITY];
 static volatile uint32_t debug_write_count = 0;
 
-static const uint16_t hook_addresses[] = {0x672d,0xa45f,0xa475,0xd9cb,0xd9ce,0xc747,0xc35e,0xcbdc,0xa774};
-static const uint8_t hook_opcodes[]   = {0xcd,  0xcd,  0xcd,  0xcd,  0xcd,  0x3a,  0x21,  0x7a,  0x21};
+static const uint16_t hook_addresses[] = {0x672d,0xa45f,0xa475,0xd9cb,0xd9ce,0xc747,0xc35e,0xcbdc,0xa774,0xc462};
+static const uint8_t hook_opcodes[]   = {0xcd,  0xcd,  0xcd,  0xcd,  0xcd,  0x3a,  0x21,  0x7a,  0x21,  0x35};
 
 static void copy_bytes(uint8_t *dst, const uint8_t *src, size_t n) {
   for (size_t i=0;i<n;i++) dst[i]=src[i];
@@ -125,6 +126,8 @@ static uint32_t int_data(void *ctx) { (void)ctx; return 0xffff; }
 static void on_hook(void *ctx, uint16_t address) {
   Room *r=(Room*)ctx;
   uint8_t original=0;
+  uint16_t life_address=Z_Z80_STATE_HL(&r->cpu.state);
+  uint8_t life_before=r->mem[life_address];
   int found=0;
   for(int i=0;i<(int)(sizeof(hook_addresses)/sizeof(hook_addresses[0]));i++) {
     if(hook_addresses[i]==address) { original=hook_opcodes[i]; found=1; break; }
@@ -177,6 +180,10 @@ static void on_hook(void *ctx, uint16_t address) {
     case 0xa774:
       if(!is_active(r)) Z_Z80_STATE_PC(&r->cpu.state)=0xa759;
       break;
+    case 0xc462:
+      /* DEC (HL) is Starquake's lives-decrement instruction. */
+      if(is_active(r) && life_before==1 && r->mem[life_address]==0) game_over=1;
+      break;
   }
 }
 
@@ -227,6 +234,8 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
   if(cheats) { base[0xc462]=0; base[0xd41f]=0xc9; base[0xce8e]=0x18; base[0xd735]=0; }
 
   for(int i=0;i<(int)(sizeof(hook_addresses)/sizeof(hook_addresses[0]));i++) {
+    /* The infinite-lives cheat replaces DEC (HL) at 0xC462, so do not hook it. */
+    if(hook_addresses[i]==0xc462 && cheats) continue;
     if(base[hook_addresses[i]]!=hook_opcodes[i]) return -2-(int)i;
     base[hook_addresses[i]]=BREAKPOINT;
   }
@@ -244,7 +253,7 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
     r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->lock=0;
     r->cpu.cycles=0;
   }
-  current_room=8; initialized=1; hook_error=0; audio_count=0; audio_last=0; debug_write_count=0;
+  current_room=8; initialized=1; hook_error=0; game_over=0; audio_count=0; audio_last=0; debug_write_count=0;
   for(int i=0;i<8;i++) key_matrix[i]=0xff;
   return 0;
 }
@@ -277,6 +286,7 @@ void emu_tick(int max_frames_per_room) { emu_tick_range(0,ROOM_COUNT,max_frames_
 void emu_begin_frame(void) { __atomic_store_n(&audio_count,0,__ATOMIC_SEQ_CST); audio_overflow=0; }
 
 int emu_current_room(void) { return current_room; }
+int emu_game_over(void) { return game_over; }
 int emu_room_dirty(int room) { return (room>=0&&room<ROOM_COUNT)?rooms[room].dirty:0; }
 void emu_clear_dirty(int room) { if(room>=0&&room<ROOM_COUNT) rooms[room].dirty=0; }
 int emu_take_dirty(int room) { if(room<0||room>=ROOM_COUNT) return 0; return __atomic_exchange_n(&rooms[room].dirty,0,__ATOMIC_SEQ_CST); }
