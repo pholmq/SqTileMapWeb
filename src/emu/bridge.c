@@ -90,7 +90,14 @@ static void clone_room(Room *from, Room *to) {
 static int clone_room_for_entry(Room *from, Room *to, uint16_t room) {
   if (from==to) return 0;
   lock_room(to);
-  if(to->visited) { unlock_room(to); return 0; }
+  if(to->visited) {
+    /* Keep the destination room's saved CPU and environment, but refresh
+       the player sprite from the room transition that is entering it. */
+    copy_bytes(to->mem+0xdd18,from->mem+0xdd18,32);
+    to->dirty=1;
+    unlock_room(to);
+    return 0;
+  }
   copy_bytes(to->mem,from->mem,65536);
   to->cpu.state=from->cpu.state;
   poke16(to,0xd2c8,room);
@@ -329,6 +336,33 @@ void emu_begin_frame(void) { __atomic_store_n(&audio_count,0,__ATOMIC_SEQ_CST); 
 
 int emu_current_room(void) { return current_room; }
 int emu_game_over(void) { return __atomic_load_n(&game_over,__ATOMIC_SEQ_CST); }
+
+int emu_player_on_teleporter(void) {
+  if(!initialized) return 0;
+  Room *r=&rooms[__atomic_load_n(&current_room,__ATOMIC_SEQ_CST)];
+  uint8_t *m=r->mem;
+  uint16_t screen=peek16(r,0xd2c8);
+  if(screen>=ROOM_COUNT) return 0;
+
+  /* Player sprite 0: X character, X pixel offset and bottom-up Y pixel. */
+  int player_x=(int)m[0xdd1c]*8+(int)m[0xdd1d]+12;
+  int player_y=192-(int)m[0xdd1e]+16;
+
+  for(int screen_slot=0;screen_slot<12;screen_slot++) {
+    int big_platform=m[0x7530+(screen*12)+screen_slot];
+    if(big_platform>=40) continue;
+    for(int sub_slot=0;sub_slot<4;sub_slot++) {
+      int small_platform=m[0x9840+(big_platform*4)+sub_slot];
+      if((m[0x9740+small_platform]>>4)!=0x0d) continue;
+
+      int x0=(screen_slot%4)*64+(sub_slot%2)*32;
+      int y0=48+(screen_slot/4)*48+(sub_slot/2)*24;
+      if(player_x>=x0 && player_x<x0+32 && player_y>=y0 && player_y<y0+24) return 1;
+    }
+  }
+  return 0;
+}
+
 int emu_room_dirty(int room) { return (room>=0&&room<ROOM_COUNT)?rooms[room].dirty:0; }
 void emu_clear_dirty(int room) { if(room>=0&&room<ROOM_COUNT) rooms[room].dirty=0; }
 int emu_take_dirty(int room) { if(room<0||room>=ROOM_COUNT) return 0; return __atomic_exchange_n(&rooms[room].dirty,0,__ATOMIC_SEQ_CST); }
