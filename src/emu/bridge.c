@@ -35,6 +35,17 @@ static volatile int audio_count = 0;
 static int audio_overflow = 0;
 static volatile int audio_last = 0;
 
+#define DEBUG_WRITE_CAPACITY 4096
+typedef struct {
+  uint16_t pc;
+  uint16_t address;
+  uint16_t frame_cycle;
+  uint8_t before;
+  uint8_t after;
+} DebugWrite;
+static DebugWrite debug_writes[DEBUG_WRITE_CAPACITY];
+static volatile uint32_t debug_write_count = 0;
+
 static const uint16_t hook_addresses[] = {0x672d,0xa45f,0xa475,0xd9cb,0xd9ce,0xc747,0xc35e,0xcbdc,0xa774};
 static const uint8_t hook_opcodes[]   = {0xcd,  0xcd,  0xcd,  0xcd,  0xcd,  0x3a,  0x21,  0x7a,  0x21};
 
@@ -79,6 +90,16 @@ static uint8_t mem_read(void *ctx, uint16_t address) {
 static void mem_write(void *ctx, uint16_t address, uint8_t value) {
   Room *r=(Room*)ctx;
   if(address>=0x4000) {
+    uint8_t before=r->mem[address];
+    if(is_active(r)) {
+      uint32_t index=__atomic_fetch_add(&debug_write_count,1,__ATOMIC_SEQ_CST);
+      DebugWrite *entry=&debug_writes[index % DEBUG_WRITE_CAPACITY];
+      entry->pc=Z_Z80_STATE_PC(&r->cpu.state);
+      entry->address=address;
+      entry->frame_cycle=(uint16_t)(r->frame_cycles + (int)r->cpu.cycles);
+      entry->before=before;
+      entry->after=value;
+    }
     r->mem[address]=value;
     if(address<0x5b00) r->dirty=1;
   }
@@ -223,7 +244,7 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
     r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->lock=0;
     r->cpu.cycles=0;
   }
-  current_room=8; initialized=1; hook_error=0; audio_count=0; audio_last=0;
+  current_room=8; initialized=1; hook_error=0; audio_count=0; audio_last=0; debug_write_count=0;
   for(int i=0;i<8;i++) key_matrix[i]=0xff;
   return 0;
 }
@@ -270,6 +291,15 @@ int emu_audio_overflowed(void) { return audio_overflow; }
 int emu_audio_last(void) { return __atomic_load_n(&audio_last,__ATOMIC_SEQ_CST); }
 int emu_is_initialized(void) { return initialized; }
 int emu_room_count(void) { return ROOM_COUNT; }
+
+/* Diagnostic exports: active-room RAM, CPU state and recent RAM writes. */
+int emu_debug_ram_ptr(void) { return (int)(uintptr_t)(rooms[current_room].mem+0x4000); }
+int emu_debug_pc(void) { return Z_Z80_STATE_PC(&rooms[current_room].cpu.state); }
+int emu_debug_sp(void) { return Z_Z80_STATE_SP(&rooms[current_room].cpu.state); }
+int emu_debug_write_ptr(void) { return (int)(uintptr_t)debug_writes; }
+int emu_debug_write_count(void) { return (int)__atomic_load_n(&debug_write_count,__ATOMIC_SEQ_CST); }
+int emu_debug_write_capacity(void) { return DEBUG_WRITE_CAPACITY; }
+void emu_debug_clear_writes(void) { __atomic_store_n(&debug_write_count,0,__ATOMIC_SEQ_CST); }
 
 void *memcpy(void *dst, const void *src, size_t n) { uint8_t *d=(uint8_t*)dst; const uint8_t *s=(const uint8_t*)src; for(size_t i=0;i<n;i++) d[i]=s[i]; return dst; }
 void *memset(void *dst, int v, size_t n) { uint8_t *d=(uint8_t*)dst; for(size_t i=0;i<n;i++) d[i]=(uint8_t)v; return dst; }
