@@ -309,6 +309,11 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
     int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
     if(!active && !visible && !visited_background) continue;
     lock_room(r);
+    if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
+       __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
+      unlock_room(r);
+      continue;
+    }
     if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
       int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
       for(int f=0;f<frames;f++) {
