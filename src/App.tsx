@@ -493,10 +493,12 @@ export default function App() {
       }
 
       const binding = controlsRef.current.find(item => item.code && item.code === event.code);
-      if (binding) {
+      if (binding || SPECTRUM_KEY_POSITIONS[event.code]) {
         event.preventDefault();
-        pressedCodesRef.current.add(event.code);
-        publishKeys();
+        if (!event.repeat || !pressedCodesRef.current.has(event.code)) {
+          pressedCodesRef.current.add(event.code);
+          publishKeys();
+        }
         return;
       }
       if (event.repeat) return;
