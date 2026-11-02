@@ -240,8 +240,10 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
     Room *r=&rooms[i];
     int col=i%16, row=i/16;
     int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
+    int active=is_active(r);
+    if(!active && !visible) continue;
     lock_room(r);
-    if(r->running && (is_active(r) || (visible && ( !r->drawing || frame_number % background_divisor == 0)))) {
+    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)))) {
       for(int f=0;f<max_frames_per_room;f++) {
         run_one_frame(r);
         if(r->drawing) break;
