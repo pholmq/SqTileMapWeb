@@ -85,7 +85,7 @@ function collect(frameId: number) {
     if (count) audioEvents = new Uint32Array(memory.buffer, e.emu_audio_ptr() >>> 0, count).slice();
     audioLast = e.emu_audio_last();
   }
-  scope.postMessage({ type: 'collected', frameId, workerIndex, dirty, audioEvents, audioLast, currentRoom: e.emu_current_room(), gameOver: workerIndex === 0 && typeof e.emu_game_over === 'function' && e.emu_game_over() !== 0, audioOverflow: workerIndex === 0 && e.emu_audio_overflowed() !== 0 }, [...dirty.map(x => x.screen), audioEvents.buffer as ArrayBuffer]);
+  scope.postMessage({ type: 'collected', frameId, workerIndex, dirty, audioEvents, audioLast, currentRoom: e.emu_current_room(), gameOver: workerIndex === 0 && typeof e.emu_game_over === 'function' && e.emu_game_over() !== 0, onTeleporter: workerIndex === 0 && typeof e.emu_player_on_teleporter === 'function' && e.emu_player_on_teleporter() !== 0, audioOverflow: workerIndex === 0 && e.emu_audio_overflowed() !== 0 }, [...dirty.map(x => x.screen), audioEvents.buffer as ArrayBuffer]);
 }
 
 scope.onmessage = (event: MessageEvent<Incoming>) => {
