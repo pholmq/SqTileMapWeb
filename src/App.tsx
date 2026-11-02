@@ -104,6 +104,8 @@ export default function App() {
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
+  const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
   const controlsRef = useRef(controls);
@@ -549,7 +551,10 @@ export default function App() {
       const rows = [...INITIAL_KEYS];
       for (const code of pressedCodesRef.current) {
         const binding = controlsRef.current.find(item => item.code && item.code === code);
-        const positions = binding ? [binding] : [SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
+        const nativePosition = SPECTRUM_KEY_POSITIONS[code];
+        const positions = keyboardModeRef.current === 'spectrum'
+          ? [nativePosition].filter((position): position is { row: number; bit: number } => Boolean(position))
+          : binding ? [binding] : [nativePosition].filter((position): position is { row: number; bit: number } => Boolean(position));
         for (const position of positions) rows[position.row] &= ~(1 << position.bit);
       }
       keyRowsRef.current = rows;
@@ -578,8 +583,20 @@ export default function App() {
         return;
       }
 
+      if (event.code === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation();
+        const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
+        keyboardModeRef.current = next;
+        setKeyboardMode(next);
+        pressedCodesRef.current.clear();
+        keyRowsRef.current = [...INITIAL_KEYS];
+        workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+        return;
+      }
+
       const binding = controlsRef.current.find(item => item.code && item.code === event.code);
-      if (binding || SPECTRUM_KEY_POSITIONS[event.code]) {
+      if (keyboardModeRef.current === 'spectrum' ? Boolean(SPECTRUM_KEY_POSITIONS[event.code]) : Boolean(binding || SPECTRUM_KEY_POSITIONS[event.code])) {
         event.preventDefault();
         if (!event.repeat || !pressedCodesRef.current.has(event.code)) {
           pressedCodesRef.current.add(event.code);
@@ -644,6 +661,15 @@ export default function App() {
   };
   const onPointerUp = () => { dragRef.current = null; };
 
+  const toggleKeyboardMode = () => {
+    const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
+    keyboardModeRef.current = next;
+    setKeyboardMode(next);
+    pressedCodesRef.current.clear();
+    keyRowsRef.current = [...INITIAL_KEYS];
+    workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+  };
+
   const togglePlay = () => {
     if (!ready || gameOver || restarting) return;
     if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
@@ -696,23 +722,24 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.svg`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
-        <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
-        <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
+        <div className="header-controls">
+          <div className="transport">
+            <button className="primary-button" onClick={gameOver ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
+            <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
+            <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
+          </div>
+          <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
+          <button className="keyboard-mode-button" title="Switch between mapped controls and the original Spectrum keyboard (Tab)" onClick={toggleKeyboardMode}>{keyboardMode === 'mapped' ? 'WASD' : 'SPECTRUM'}</button>
+          <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
+        </div>
       </header>
 
-      <section className="toolbar">
-        <div className="transport">
-          <button className="primary-button" onClick={gameOver ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
-          <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
-          <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
-        </div>
-        <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
-        <div className="toolbar-spacer" />
-      </section>
-
       <section className="workspace">
-        <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
-          <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+        <div className="game-view">
+          <div className="hud-strip"><canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" /></div>
+          <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+            <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+          </div>
         </div>
         <aside className="side-panel">
           <div className="panel-section">
