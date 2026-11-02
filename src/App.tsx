@@ -307,6 +307,8 @@ export default function App() {
     if (message.gameOver) {
       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
       initialPreviewTimerRef.current = null;
+      if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+      frameTimerRef.current = null;
       playingRef.current = false;
       setPlaying(false);
       setGameOver(true);

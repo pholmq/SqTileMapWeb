@@ -30,7 +30,7 @@ static uint8_t key_matrix[8] = {255,255,255,255,255,255,255,255};
 static int initialized = 0;
 static int hook_error = 0;
 static int cheat_mode = 0;
-static int game_over = 0;
+static volatile int game_over = 0;
 static volatile int active_frame_number = 0;
 static volatile int transition_frame = -1;
 static volatile int transition_room = -1;
@@ -209,10 +209,13 @@ static void on_hook(void *ctx, uint16_t address) {
       break;
     case 0xc462:
       /* DEC (HL) is Starquake's lives-decrement instruction. */
-      if(is_active(r) && life_before==1 && r->mem[life_address]==0) game_over=1;
+      if(is_active(r) && life_before==1 && r->mem[life_address]==0) {
+        __atomic_store_n(&game_over,1,__ATOMIC_SEQ_CST);
+        r->cpu.cycles=r->run_budget;
+      }
       break;
   }
-  if(r->transitioned) r->cpu.cycles=r->run_budget;
+  if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) r->cpu.cycles=r->run_budget;
 }
 
 static void run_one_frame(Room *r) {
@@ -220,11 +223,11 @@ static void run_one_frame(Room *r) {
   r->transitioned=0;
   r->run_budget=CYCLES_BEFORE_INT;
   r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
-  if(r->transitioned) { r->frame_cycles=0; return; }
+  if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
   z80_int(&r->cpu,1);
   r->run_budget=32;
   r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
-  if(r->transitioned) { r->frame_cycles=0; return; }
+  if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
   z80_int(&r->cpu,0);
   r->frame_cycles-=FRAME_CYCLES;
 }
@@ -286,50 +289,46 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
     r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->visited=0; r->lock=0;
     r->cpu.cycles=0;
   }
-  current_room=8; initialized=1; hook_error=0; game_over=0; active_frame_number=0; transition_frame=-1; transition_room=-1; audio_count=0; audio_last=0; debug_write_count=0;
+  current_room=8; initialized=1; hook_error=0; __atomic_store_n(&game_over,0,__ATOMIC_SEQ_CST); active_frame_number=0; transition_frame=-1; transition_room=-1; audio_count=0; audio_last=0; debug_write_count=0;
   for(int i=0;i<8;i++) key_matrix[i]=0xff;
   return 0;
 }
 
 void emu_set_key_row(int row, int value) { if(row>=0 && row<8) key_matrix[row]=(uint8_t)value; }
 void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int frame_number, int background_divisor, int min_col, int max_col, int min_row, int max_row) {
-  if(!initialized) return;
+  if(!initialized || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
+  (void)min_col; (void)max_col; (void)min_row; (void)max_row;
   if(start_room<0) start_room=0;
   if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
-  if(max_frames_per_room<1) max_frames_per_room=1;
-  if(max_frames_per_room>50) max_frames_per_room=50;
-  if(background_divisor<1) background_divisor=1;
+  (void)max_frames_per_room;
+  (void)background_divisor;
   __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
   for(int i=start_room;i<end_room;i++) {
+    if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
     Room *r=&rooms[i];
+    if(!is_active(r)) continue;
     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) continue;
-    int col=i%16, row=i/16;
-    int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
-    int active=is_active(r);
-    int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
-    if(!active && !visible && !visited_background) continue;
     lock_room(r);
+    if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) {
+      unlock_room(r);
+      return;
+    }
     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
       unlock_room(r);
       continue;
     }
-    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
-      int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
-      for(int f=0;f<frames;f++) {
-        run_one_frame(r);
-        if(r->transitioned || r->drawing) break;
-      }
-    }
+    if(r->running) run_one_frame(r);
     unlock_room(r);
+    if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
   }
 }
 void emu_tick(int max_frames_per_room) { emu_tick_range(0,ROOM_COUNT,max_frames_per_room,0,1,0,15,0,31); }
 void emu_begin_frame(void) { __atomic_store_n(&audio_count,0,__ATOMIC_SEQ_CST); audio_overflow=0; }
 
 int emu_current_room(void) { return current_room; }
-int emu_game_over(void) { return game_over; }
+int emu_game_over(void) { return __atomic_load_n(&game_over,__ATOMIC_SEQ_CST); }
 int emu_room_dirty(int room) { return (room>=0&&room<ROOM_COUNT)?rooms[room].dirty:0; }
 void emu_clear_dirty(int room) { if(room>=0&&room<ROOM_COUNT) rooms[room].dirty=0; }
 int emu_take_dirty(int room) { if(room<0||room>=ROOM_COUNT) return 0; return __atomic_exchange_n(&rooms[room].dirty,0,__ATOMIC_SEQ_CST); }
