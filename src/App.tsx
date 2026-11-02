@@ -629,7 +629,7 @@ export default function App() {
   const captureGameDiagnostics = () => {
     if (!ready || debugCapturePending) return;
     setDebugCapturePending(true);
-    const workerIndex = Math.min(workerCountRef.current - 1, Math.floor(currentRoomRef.current * workerCountRef.current / 512));
+    const workerIndex = Math.min(workerCountRef.current - 1, Math.ceil((currentRoomRef.current + 1) * workerCountRef.current / 512) - 1);
     workersRef.current[workerIndex]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
   };
 
