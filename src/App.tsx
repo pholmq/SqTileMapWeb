@@ -622,7 +622,8 @@ export default function App() {
   const captureGameDiagnostics = () => {
     if (!ready || debugCapturePending) return;
     setDebugCapturePending(true);
-    workersRef.current[0]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
+    const workerIndex = Math.min(workerCountRef.current - 1, Math.floor(currentRoomRef.current * workerCountRef.current / 512));
+    workersRef.current[workerIndex]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
   };
 
   const togglePlay = () => {
