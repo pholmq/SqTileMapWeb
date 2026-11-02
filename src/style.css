@@ -20,4 +20,4 @@
 .edit-bind:hover{border-color:#e3bd68;color:#f2d48c}
 .edit-bind.capturing{border-color:#e3bd68;background:#45371f;color:#ffe5a2}
 
-.topbar{position:relative;justify-content:space-between;height:104px;gap:16px}.topbar .sound-button{position:relative;z-index:2;flex-shrink:0}.hud-canvas{position:absolute;z-index:1;top:50%;left:50%;transform:translate(-50%,-50%);width:min(512px,calc(100vw - 300px));height:auto;aspect-ratio:16/3;image-rendering:pixelated;object-fit:fill;pointer-events:none;border:1px solid #526176;border-radius:3px;box-shadow:0 5px 24px #0009;background:#05080d;}
+.topbar{position:relative;justify-content:space-between;height:104px;gap:16px}.topbar .sound-button{position:relative;z-index:2;flex-shrink:0}.hud-canvas{position:absolute;z-index:1;top:50%;left:50%;transform:translate(-50%,-50%);width:min(512px,calc(100vw - 500px));height:auto;aspect-ratio:16/3;image-rendering:pixelated;object-fit:fill;pointer-events:none;border:1px solid #526176;border-radius:3px;box-shadow:0 5px 24px #0009;background:#05080d;}
