@@ -21,7 +21,7 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'right', label: 'Right', code: 'KeyP', row: 5, bit: 0 },
   { action: 'fire', label: 'Fire', code: 'KeyM', row: 7, bit: 2 },
 ];
-const CONTROL_STORAGE_KEY = 'starquake-controls-v1';
+const CONTROL_STORAGE_KEY = 'starquake-controls-v2';
 function readControls(): ControlBinding[] {
   try {
     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
@@ -365,7 +365,7 @@ export default function App() {
         if (binding.code && pressedCodesRef.current.has(binding.code)) rows[binding.row] &= ~(1 << binding.bit);
       }
       keyRowsRef.current = rows;
-      for (const worker of workersRef.current) worker.postMessage({ type: 'keys', rows });
+      workersRef.current[0]?.postMessage({ type: 'keys', rows });
     };
     const onKey = (event: KeyboardEvent) => {
       const pending = captureActionRef.current;
