@@ -297,7 +297,6 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
 void emu_set_key_row(int row, int value) { if(row>=0 && row<8) key_matrix[row]=(uint8_t)value; }
 void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int frame_number, int background_divisor, int min_col, int max_col, int min_row, int max_row) {
   if(!initialized || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
-  (void)background_divisor;
   (void)min_col; (void)max_col; (void)min_row; (void)max_row;
   if(start_room<0) start_room=0;
   if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
