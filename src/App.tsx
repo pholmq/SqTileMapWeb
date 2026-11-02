@@ -20,6 +20,7 @@ type WorkerMessage =
   | { type: 'module-ready'; workerIndex: number; workerCount: number; shared: boolean; rangeStart: number; rangeEnd: number }
   | { type: 'ready'; roomCount: number; currentRoom: number }
   | { type: 'error'; message: string }
+  | { type: 'debug-error'; message: string }
   | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
@@ -313,6 +314,11 @@ export default function App() {
   }, []);
 
   const handleWorkerMessage = useCallback((message: WorkerMessage) => {
+    if (message.type === 'debug-error') {
+      setDebugCapturePending(false);
+      setError(message.message);
+      return;
+    }
     if (message.type === 'debug-captured') {
       const ram = new Uint8Array(message.ram);
       const writeBytes = new Uint8Array(message.writes);
@@ -352,7 +358,7 @@ export default function App() {
       return;
     }
     if (message.type === 'error') {
-      setError(message.message); setStatus('Emulator error'); playingRef.current = false; setPlaying(false); frameStateRef.current = null; return;
+      setDebugCapturePending(false); setError(message.message); setStatus('Emulator error'); playingRef.current = false; setPlaying(false); frameStateRef.current = null; return;
     }
     if (message.type === 'module-ready') {
       moduleReadyRef.current.add(message.workerIndex);
