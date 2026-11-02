@@ -268,7 +268,6 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
       for(int f=0;f<max_frames_per_room;f++) {
         run_one_frame(r);
         if(r->drawing) break;
-        if(f==max_frames_per_room-1) r->drawing=1;
       }
     }
     unlock_room(r);
