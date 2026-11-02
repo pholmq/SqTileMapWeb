@@ -107,6 +107,11 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       collect(message.frameId);
     } else if (message.type === 'debug-capture' && wasm && memory) {
       const e = wasm as Record<string, any>;
+      const debugExports = ['emu_debug_ram_ptr', 'emu_debug_pc', 'emu_debug_sp', 'emu_debug_write_ptr', 'emu_debug_write_count', 'emu_debug_write_capacity', 'emu_debug_clear_writes'];
+      if (debugExports.some(name => typeof e[name] !== 'function')) {
+        scope.postMessage({ type: 'debug-error', message: 'Diagnostic support is not compiled into the current WebAssembly module. Run npm run build:wasm and rebuild the app.' });
+        return;
+      }
       const heap = new Uint8Array(memory.buffer);
       const ram = heap.slice(e.emu_debug_ram_ptr() >>> 0, (e.emu_debug_ram_ptr() >>> 0) + 49152);
       const writeCount = Math.max(0, e.emu_debug_write_count() | 0);
