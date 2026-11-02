@@ -20,6 +20,7 @@ type WorkerMessage =
   | { type: 'module-ready'; workerIndex: number; workerCount: number; shared: boolean; rangeStart: number; rangeEnd: number }
   | { type: 'ready'; roomCount: number; currentRoom: number }
   | { type: 'error'; message: string }
+  | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
   | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; audioOverflow: boolean };
@@ -78,6 +79,7 @@ export default function App() {
   const snapshotRef = useRef<ArrayBuffer | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
+  const debugCaptureIdRef = useRef(0);
   const currentRoomRef = useRef(8);
   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
   const lastFlashPhaseRef = useRef(false);
@@ -100,11 +102,12 @@ export default function App() {
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [fps, setFps] = useState(0);
   const [frameMs, setFrameMs] = useState(0);
+  const [debugCapturePending, setDebugCapturePending] = useState(false);
   const [roomCount, setRoomCount] = useState(512);
   const [workerCount, setWorkerCount] = useState(1);
   const [cheats, setCheats] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
-  const [backgroundDivisor, setBackgroundDivisor] = useState(5);
+  const [backgroundDivisor, setBackgroundDivisor] = useState(2);
   const [romName, setRomName] = useState('');
   const [snapshotName, setSnapshotName] = useState('No snapshot loaded');
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
@@ -310,6 +313,44 @@ export default function App() {
   }, []);
 
   const handleWorkerMessage = useCallback((message: WorkerMessage) => {
+    if (message.type === 'debug-captured') {
+      const ram = new Uint8Array(message.ram);
+      const writeBytes = new Uint8Array(message.writes);
+      const view = new DataView(writeBytes.buffer, writeBytes.byteOffset, writeBytes.byteLength);
+      const writes = Array.from({ length: Math.floor(writeBytes.byteLength / 8) }, (_, index) => {
+        const offset = index * 8;
+        return {
+          pc: view.getUint16(offset, true),
+          address: view.getUint16(offset + 2, true),
+          frameCycle: view.getUint16(offset + 4, true),
+          before: view.getUint8(offset + 6),
+          after: view.getUint8(offset + 7),
+        };
+      });
+      const diagnostic = {
+        format: 'Starquake emulator diagnostic v1',
+        capturedAt: message.capturedAt,
+        room: message.room,
+        pc: message.pc,
+        sp: message.sp,
+        ramStart: '0x4000',
+        ramEnd: '0xffff',
+        ramHex: Array.from(ram, value => value.toString(16).padStart(2, '0')).join(''),
+        writeCountSincePreviousCapture: message.writeCount,
+        writeLogTruncated: message.writeCount > message.writeCapacity,
+        writes,
+      };
+      const blob = new Blob([JSON.stringify(diagnostic, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `starquake-diagnostic-room-${message.room}-${message.captureId}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setDebugCapturePending(false);
+      setStatus(`Diagnostic captured · room ${message.room}`);
+      return;
+    }
     if (message.type === 'error') {
       setError(message.message); setStatus('Emulator error'); playingRef.current = false; setPlaying(false); frameStateRef.current = null; return;
     }
@@ -466,8 +507,8 @@ export default function App() {
       const rows = [...INITIAL_KEYS];
       for (const code of pressedCodesRef.current) {
         const binding = controlsRef.current.find(item => item.code && item.code === code);
-        const position = binding ?? SPECTRUM_KEY_POSITIONS[code];
-        if (position) rows[position.row] &= ~(1 << position.bit);
+        const positions = [binding, SPECTRUM_KEY_POSITIONS[code]].filter((position): position is { row: number; bit: number } => Boolean(position));
+        for (const position of positions) rows[position.row] &= ~(1 << position.bit);
       }
       keyRowsRef.current = rows;
       workersRef.current[0]?.postMessage({ type: 'keys', rows });
@@ -578,6 +619,12 @@ export default function App() {
     snapshotRef.current = buffer; setSnapshotName(file.name); setError('');
     setReady(false); playingRef.current = false; setPlaying(false); setStatus('Snapshot selected. Select a compatible Spectrum ROM to initialise.');
   };
+  const captureGameDiagnostics = () => {
+    if (!ready || debugCapturePending) return;
+    setDebugCapturePending(true);
+    workersRef.current[0]?.postMessage({ type: 'debug-capture', captureId: ++debugCaptureIdRef.current });
+  };
+
   const togglePlay = () => {
     if (!ready) return;
     if (playingRef.current) {
@@ -621,12 +668,17 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
-          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum</h1><p>{ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onClick={togglePlay} disabled={!ready}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
+          {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">512 ROOMS · 16 × 32</div><h1>Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum</h1><p>{ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready}><Play size={17} />{hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-heading"><span>MAP INSPECTOR</span><span className="live-label">{playing ? 'RUNNING' : ready ? 'READY' : poolReady ? 'WAITING' : 'LOADING'}</span></div>
           <div className="active-room-card"><div className="room-label">ACTIVE ROOM</div><div className="room-number">{currentRoom.toString().padStart(3, '0')}</div><div className="room-coordinates">COLUMN {roomXY.x + 1} / 16 <i /> ROW {roomXY.y + 1} / 32</div></div>
           <div className="panel-section"><h3>EMULATION</h3><div className="metric"><span>CPU architecture</span><b>Zilog Z80</b></div><div className="metric"><span>Clock</span><b>3.5 MHz</b></div><div className="metric"><span>Frame rate target</span><b>50 Hz</b></div><div className="metric"><span>Virtual machines</span><b>512 room states</b></div><div className="metric"><span>Worker pool</span><b>{workerCount} thread{workerCount === 1 ? '' : 's'}</b></div><div className="metric"><span>Background update</span><b>{50 / backgroundDivisor} Hz</b></div><div className="metric"><span>Snapshot format</span><b>48K SNA</b></div></div>
+          <div className="panel-section">
+            <h3>GAME-OVER DIAGNOSTICS</h3>
+            <p className="control-help">Capture before a death, after respawning, and after the final life is lost. Each capture downloads RAM, CPU position and recent RAM writes.</p>
+            <button className="primary-button" onClick={captureGameDiagnostics} disabled={!ready || debugCapturePending}>{debugCapturePending ? 'Capturing…' : 'Capture diagnostic'}</button>
+          </div>
           <div className="panel-section">
             <h3>CONTROLS <span className="control-hint">CUSTOMISE KEY BINDINGS</span></h3>
             <div className="controls-config">
