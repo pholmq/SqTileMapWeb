@@ -27,6 +27,7 @@ for (let flash = 0; flash < 2; flash++) {
 }
 
 const imageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
+const hudImageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
 
 export function spectrumScreenHasFlash(screen: Uint8Array) {
   for (let i = 0x1800; i < 0x1b00; i++) if (screen[i] & 0x80) return true;
@@ -59,6 +60,29 @@ export function paintSpectrumRoom(
     }
   }
   target.putImageData(image, (room % 16) * 256, Math.floor(room / 16) * 144);
+}
+
+export function paintSpectrumHud(target: CanvasRenderingContext2D, screen: Uint8Array) {
+  let image = hudImageDataCache.get(target);
+  if (!image) {
+    image = target.createImageData(256, 48);
+    hudImageDataCache.set(target, image);
+  }
+  const out = new Uint32Array(image.data.buffer, image.data.byteOffset, image.data.byteLength / 4);
+  let dest = 0;
+  for (let y = 0; y < 48; y++) {
+    const bitmapBase = ((y & 0xc0) << 5) | ((y & 0x38) << 2) | ((y & 7) << 8);
+    const attrBase = 0x1800 + ((y >> 3) << 5);
+    for (let byteX = 0; byteX < 32; byteX++) {
+      const bitmap = screen[bitmapBase + byteX];
+      const attr = screen[attrBase + byteX];
+      const lookup = (((attr >> 6) & 1) * 256 + attr) * 256 + bitmap;
+      const pixelBase = lookup * 8;
+      for (let bit = 0; bit < 8; bit++) out[dest + bit] = pixelLookup[pixelBase + bit];
+      dest += 8;
+    }
+  }
+  target.putImageData(image, 0, 0);
 }
 
 export const MAP_WIDTH = 16 * 256;

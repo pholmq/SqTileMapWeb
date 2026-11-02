@@ -20,3 +20,5 @@
 .edit-bind{min-width:47px;min-height:27px;padding:4px 8px;border:1px solid #465873;border-radius:4px;background:#1a2a40;color:#dce5f2;font-size:9px;font-weight:600;cursor:pointer}
 .edit-bind:hover{border-color:#e3bd68;color:#f2d48c}
 .edit-bind.capturing{border-color:#e3bd68;background:#45371f;color:#ffe5a2}
+
+.hud-canvas{position:absolute;z-index:3;top:10px;left:50%;transform:translateX(-50%);width:min(512px,calc(100% - 24px));height:auto;aspect-ratio:16/3;image-rendering:pixelated;object-fit:fill;pointer-events:none;border:1px solid #526176;border-radius:3px;box-shadow:0 5px 24px #0009;background:#05080d;}

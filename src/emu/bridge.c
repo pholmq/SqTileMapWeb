@@ -18,6 +18,7 @@ typedef struct {
   int running;
   int dirty;
   int frame_cycles;
+  int visited;
   volatile int lock;
 } Room;
 
@@ -81,8 +82,25 @@ static void clone_room(Room *from, Room *to) {
   to->dirty=1;
   unlock_room(to);
 }
+static int clone_room_for_entry(Room *from, Room *to, uint16_t room) {
+  if (from==to) return 0;
+  lock_room(to);
+  if(to->visited) { unlock_room(to); return 0; }
+  copy_bytes(to->mem,from->mem,65536);
+  to->cpu.state=from->cpu.state;
+  poke16(to,0xd2c8,room);
+  to->dirty=0;
+  to->drawing=0;
+  to->visited=1;
+  unlock_room(to);
+  return 1;
+}
 static void clone_all(Room *from) {
-  for(int i=0;i<ROOM_COUNT;i++) if(&rooms[i]!=from) clone_room(from,&rooms[i]);
+  for(int i=0;i<ROOM_COUNT;i++) {
+    rooms[i].visited=0;
+    if(&rooms[i]!=from) clone_room(from,&rooms[i]);
+  }
+  from->visited=1;
 }
 static int is_active(Room *r) { return r->room==__atomic_load_n(&current_room,__ATOMIC_SEQ_CST); }
 static uint8_t mem_read(void *ctx, uint16_t address) {
@@ -152,10 +170,10 @@ static void on_hook(void *ctx, uint16_t address) {
       uint16_t new_room=peek16(r,0xd2c8);
       if(is_active(r) && new_room<ROOM_COUNT && new_room!=r->room) {
         Room *next=&rooms[new_room];
-        clone_room(r,next);
-        poke16(next,0xd2c8,(uint16_t)new_room);
+        r->visited=1;
+        /* Seed a room only on its first visit; revisits keep their own CPU and RAM. */
+        clone_room_for_entry(r,next,new_room);
         __atomic_store_n(&current_room,new_room,__ATOMIC_SEQ_CST);
-        next->drawing=0;
       }
       r->drawing=0;
       poke16(r,0xd2c8,(uint16_t)r->room);
@@ -163,6 +181,7 @@ static void on_hook(void *ctx, uint16_t address) {
     }
     case 0xa475:
       r->drawing=1;
+      r->dirty=1;
       break;
     case 0xd9cb:
     case 0xd9ce:
@@ -250,7 +269,7 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
     r->cpu.read=mem_read; r->cpu.write=mem_write;
     r->cpu.in=port_in; r->cpu.out=port_out; r->cpu.int_data=int_data;
     r->cpu.halt=0; r->cpu.hook=on_hook;
-    r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->lock=0;
+    r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->visited=0; r->lock=0;
     r->cpu.cycles=0;
   }
   current_room=8; initialized=1; hook_error=0; game_over=0; audio_count=0; audio_last=0; debug_write_count=0;
@@ -271,10 +290,12 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
     int col=i%16, row=i/16;
     int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
     int active=is_active(r);
-    if(!active && !visible) continue;
+    int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
+    if(!active && !visible && !visited_background) continue;
     lock_room(r);
-    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)))) {
-      for(int f=0;f<max_frames_per_room;f++) {
+    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
+      int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
+      for(int f=0;f<frames;f++) {
         run_one_frame(r);
         if(r->drawing) break;
       }

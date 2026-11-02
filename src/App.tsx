@@ -1,6 +1,6 @@
 import { ChangeEvent, PointerEvent, WheelEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair, Upload, RotateCcw } from 'lucide-react';
-import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
+import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
 const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
   ShiftLeft: { row: 0, bit: 0 }, ShiftRight: { row: 0, bit: 0 },
@@ -65,6 +65,7 @@ export default function App() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const mapCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
+  const hudCanvasRef = useRef<HTMLCanvasElement>(null);
   const workersRef = useRef<Worker[]>([]);
   const workerCountRef = useRef(1);
   const poolReadyRef = useRef(false);
@@ -265,6 +266,28 @@ export default function App() {
   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
     const canvas = mapCanvasRef.current;
     const ctx = canvas?.getContext('2d', { alpha: false });
+    const previousRoom = currentRoomRef.current;
+    if (message.currentRoom !== previousRoom) {
+      if (hasStartedRef.current) {
+        if (!visitedRoomsRef.current[previousRoom]) {
+          visitedRoomsRef.current[previousRoom] = true;
+          visitedAtRef.current[previousRoom] = performance.now();
+          setVisitedVersion(version => version + 1);
+        }
+        /* A first visit must not briefly display the room we just left. */
+        if (!visitedRoomsRef.current[message.currentRoom]) {
+          screenCacheRef.current[message.currentRoom] = null;
+          flashRoomsRef.current[message.currentRoom] = false;
+          if (ctx) {
+            ctx.fillStyle = '#05080d';
+            ctx.fillRect((message.currentRoom % 16) * 256, Math.floor(message.currentRoom / 16) * 144, 256, 144);
+          }
+        }
+      }
+      currentRoomRef.current = message.currentRoom;
+      setCurrentRoom(message.currentRoom);
+      centerRoomKeepZoom(message.currentRoom);
+    }
     if (ctx) {
       const flashPhase = ((Math.floor(performance.now() / 320) & 1) === 1);
       for (const item of message.dirty) {
@@ -285,18 +308,11 @@ export default function App() {
         }
       }
     }
-    const previousRoom = currentRoomRef.current;
-    if (message.currentRoom !== previousRoom) {
-      currentRoomRef.current = message.currentRoom;
-      if (hasStartedRef.current) {
-        if (!visitedRoomsRef.current[previousRoom]) {
-          visitedRoomsRef.current[previousRoom] = true;
-          visitedAtRef.current[previousRoom] = performance.now();
-          setVisitedVersion(version => version + 1);
-        }
-      }
-      setCurrentRoom(message.currentRoom);
-      centerRoomKeepZoom(message.currentRoom);
+    const hud = hudCanvasRef.current?.getContext('2d');
+    const activeScreen = screenCacheRef.current[message.currentRoom];
+    if (hud) {
+      if (activeScreen) paintSpectrumHud(hud, activeScreen);
+      else hud.clearRect(0, 0, 256, 48);
     }
     if (message.gameOver) {
       playingRef.current = false;
@@ -499,6 +515,7 @@ export default function App() {
     if (canvas && overlay) {
       canvas.width = MAP_WIDTH; canvas.height = MAP_HEIGHT;
       overlay.width = MAP_WIDTH; overlay.height = MAP_HEIGHT;
+      if (hudCanvasRef.current) { hudCanvasRef.current.width = 256; hudCanvasRef.current.height = 48; }
       const ctx = canvas.getContext('2d');
       if (ctx) { ctx.fillStyle = '#05080d'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
     }
@@ -699,6 +716,7 @@ export default function App() {
       <section className="workspace">
         <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
           <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+          <canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" />
           {(!ready || !playing) && <div className="empty-state"><div className="empty-chip">{gameOver ? 'GAME OVER' : '512 ROOMS · 16 × 32'}</div><h1>{gameOver ? 'Game Over' : 'Starquake room by room - A web implementation of Simon Ovens TileMap for ZX Spectrum'}</h1><p>{gameOver ? 'All lives have been lost.' : ready ? (hasStartedRef.current ? 'Continue your current game.' : 'Explore the rooms of Starquake.') : 'The bundled Starquake snapshot and Spectrum ROM are loading. The game will start when you press Play.'}</p><div className="empty-meta"><span>SNAPSHOT <b>{snapshotName}</b></span><span>ROM <b>{romName || 'Not loaded'}</b></span></div><button className="primary-button start-play-button" onPointerDown={event => event.stopPropagation()} onClick={togglePlay} disabled={!ready || gameOver}><Play size={17} />{gameOver ? 'Game over' : hasStartedRef.current ? 'Resume' : 'Play'}</button></div>}
         </div>
         <aside className="side-panel">
