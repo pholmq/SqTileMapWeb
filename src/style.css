@@ -46,7 +46,6 @@
 }
 
 /* Keep the initial room zoom when the viewport is resized; fit-map is an explicit action. */
-.game-view.game-over-view .hud-strip,
 .game-view.game-over-view .map-viewport { display: none; }
 .highscore-screen {
   flex: 1;
@@ -61,9 +60,9 @@
 }
 .highscore-screen canvas {
   display: block;
-  width: 540px;
-  height: 405px;
-  max-width: 100%;
+  width: min(512px, calc(100% - 24px));
+  height: auto;
+  aspect-ratio: 16 / 9;
   max-height: 100%;
   object-fit: contain;
   image-rendering: pixelated;
