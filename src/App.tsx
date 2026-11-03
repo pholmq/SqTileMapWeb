@@ -571,7 +571,6 @@ export default function App() {
       const ctx = canvas.getContext('2d');
       if (ctx) { ctx.fillStyle = '#05080d'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
     }
-    fitMap();
     resizeViewport();
     const observer = new ResizeObserver(resizeViewport);
     if (viewportRef.current) observer.observe(viewportRef.current);
