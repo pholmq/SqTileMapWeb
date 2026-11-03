@@ -111,6 +111,9 @@ export default function App() {
   const [poolReady, setPoolReady] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [gameOver, setGameOver] = useState(false);
+  const [lastLifeLost, setLastLifeLost] = useState(false);
+  const [diagnosticText, setDiagnosticText] = useState('');
+  const lastLifeLostRef = useRef(false);
   const [currentRoom, setCurrentRoom] = useState(8);
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
@@ -347,15 +350,10 @@ export default function App() {
     
     if (staleRoom < 0 && forceRoomRef.current >= 0) forceRoomRef.current = -1;
 
-    if (message.gameOver) {
-      if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
-      initialPreviewTimerRef.current = null;
-      if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
-      frameTimerRef.current = null;
-      playingRef.current = false;
-      setPlaying(false);
-      setGameOver(true);
-      setStatus('Game over · all lives lost');
+    if (message.gameOver && !lastLifeLostRef.current) {
+      lastLifeLostRef.current = true;
+      setLastLifeLost(true);
+      setStatus('Last life lost · emulator continuing for high-score diagnosis');
     }
 
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
@@ -415,15 +413,9 @@ export default function App() {
         writeLogTruncated: message.writeCount > message.writeCapacity,
         writes,
       };
-      const blob = new Blob([JSON.stringify(diagnostic, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `starquake-diagnostic-room-${message.room}-${message.captureId}.json`;
-      anchor.click();
-      URL.revokeObjectURL(url);
+      setDiagnosticText(JSON.stringify(diagnostic));
       setDebugCapturePending(false);
-      setStatus(`Diagnostic captured · room ${message.room}`);
+      setStatus(`Diagnostic captured · room ${message.room} · copy the diagnostic text`);
       return;
     }
     if (message.type === 'error') {
@@ -438,7 +430,7 @@ export default function App() {
       return;
     }
     if (message.type === 'ready') {
-      setReady(true); setGameOver(false); setRestarting(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); screenCacheRef.current.fill(null); flashRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
+      setReady(true); setGameOver(false); setLastLifeLost(false); setDiagnosticText(''); lastLifeLostRef.current = false; setRestarting(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); screenCacheRef.current.fill(null); flashRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
       const map = mapCanvasRef.current?.getContext('2d');
       if (map) { map.fillStyle = '#05080d'; map.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
       const hud = hudCanvasRef.current?.getContext('2d');
@@ -738,6 +730,25 @@ export default function App() {
     }
   };
   
+  const captureDiagnostic = () => {
+    if (!lastLifeLost || debugCapturePending) return;
+    const worker = workersRef.current[0];
+    if (!worker) { setError('The emulator worker is unavailable.'); return; }
+    setDebugCapturePending(true);
+    setStatus('Capturing high-score diagnostic…');
+    worker.postMessage({ type: 'debug-capture', captureId: Date.now() });
+  };
+
+  const copyDiagnostic = async () => {
+    if (!diagnosticText) return;
+    try {
+      await navigator.clipboard.writeText(diagnosticText);
+      setStatus('Diagnostic copied · paste it into the chat');
+    } catch {
+      setError('Clipboard access was blocked. Select and copy the diagnostic text manually.');
+    }
+  };
+
   const restartGame = async () => {
     if (!ready || restarting) return;
     playingRef.current = false;
@@ -815,6 +826,15 @@ export default function App() {
             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
           </div>
           
+          {lastLifeLost && <div className="panel-section">
+            <h3>HIGH-SCORE DIAGNOSTIC</h3>
+            <p className="control-help">Wait until the high-score screen appears, then capture its emulator state.</p>
+            <button className="keyboard-mode-button full-width" onClick={captureDiagnostic} disabled={debugCapturePending}>{debugCapturePending ? 'CAPTURING…' : 'CAPTURE CURRENT SCREEN'}</button>
+            {diagnosticText && <>
+              <button className="keyboard-mode-button full-width" onClick={copyDiagnostic}>COPY DIAGNOSTIC TEXT</button>
+              <textarea aria-label="Diagnostic data" readOnly value={diagnosticText} rows={5} style={{ width: '100%', marginTop: 8, resize: 'vertical', font: '8px monospace' }} />
+            </>}
+          </div>}
           <div className="panel-section">
             <h3>TELEPORTER CODES</h3>
             <div className="teleporter-codes">
