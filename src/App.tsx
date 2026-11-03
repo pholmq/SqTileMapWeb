@@ -73,10 +73,12 @@ export default function App() {
   const mapCanvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+  const highscoreCanvasRef = useRef<HTMLCanvasElement>(null);
   const workersRef = useRef<Worker[]>([]);
   const poolReadyRef = useRef(false);
   const moduleReadyRef = useRef(new Set<number>());
   const cameraRef = useRef<Camera>({ scale: DEFAULT_ZOOM_SCALE, x: 0, y: 0 });
+  const viewportSizeRef = useRef({ width: 0, height: 0 });
   const dragRef = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
   const keyRowsRef = useRef<number[]>([...INITIAL_KEYS]);
   const pressedCodesRef = useRef(new Set<string>());
@@ -130,6 +132,19 @@ export default function App() {
     cameraRef.current = next;
     setCamera(next);
   }, []);
+
+  const resizeViewport = useCallback(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const previous = viewportSizeRef.current;
+    const next = { width: viewport.clientWidth, height: viewport.clientHeight };
+    viewportSizeRef.current = next;
+    if (!previous.width || !previous.height || !next.width || !next.height) return;
+    const current = cameraRef.current;
+    const worldCenterX = (previous.width / 2 - current.x) / current.scale;
+    const worldCenterY = (previous.height / 2 - current.y) / current.scale;
+    applyCamera({ ...current, x: next.width / 2 - worldCenterX * current.scale, y: next.height / 2 - worldCenterY * current.scale });
+  }, [applyCamera]);
 
   const fitMap = useCallback(() => {
     const viewport = viewportRef.current;
@@ -346,6 +361,20 @@ export default function App() {
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
   }, [centerRoomKeepZoom]);
 
+  useEffect(() => {
+    if (!gameOver) return;
+    const target = highscoreCanvasRef.current?.getContext('2d');
+    const hud = hudCanvasRef.current;
+    const map = mapCanvasRef.current;
+    if (!target || !hud || !map) return;
+    target.imageSmoothingEnabled = false;
+    target.fillStyle = '#05080d';
+    target.fillRect(0, 0, 256, 192);
+    target.drawImage(hud, 0, 0, 256, 48);
+    const room = currentRoomRef.current;
+    target.drawImage(map, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 48, 256, 144);
+  }, [gameOver]);
+
   const beginFrame = useCallback(() => {
     const workers = workersRef.current;
     if (!playingRef.current || !workers.length || frameStateRef.current) return;
@@ -543,10 +572,11 @@ export default function App() {
       if (ctx) { ctx.fillStyle = '#05080d'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
     }
     fitMap();
-    const observer = new ResizeObserver(() => fitMap());
+    resizeViewport();
+    const observer = new ResizeObserver(resizeViewport);
     if (viewportRef.current) observer.observe(viewportRef.current);
     return () => observer.disconnect();
-  }, [fitMap]);
+  }, [resizeViewport]);
 
   useEffect(() => {
     const overlay = overlayRef.current;
@@ -757,11 +787,12 @@ export default function App() {
         </div>
       </header>
       <section className="workspace">
-        <div className="game-view">
+        <div className={`game-view${gameOver ? ' game-over-view' : ''}`}>
           <div className="hud-strip"><canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" /></div>
           <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
           </div>
+          {gameOver && <div className="highscore-screen"><canvas ref={highscoreCanvasRef} width={256} height={192} aria-label="Starquake highscore screen" /></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-section">
