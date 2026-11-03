@@ -786,7 +786,7 @@ export default function App() {
         <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.png`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
         <div className="header-controls">
           <div className="transport">
-            <button className="primary-button" onClick={gameOver ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
+            <button className="primary-button" onClick={gameOver || lastLifeLost ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver || lastLifeLost ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver || lastLifeLost ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
             <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
             <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
           </div>
