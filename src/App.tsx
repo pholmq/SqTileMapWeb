@@ -364,9 +364,8 @@ export default function App() {
   useEffect(() => {
     if (!gameOver) return;
     const target = highscoreCanvasRef.current?.getContext('2d');
-    const hud = hudCanvasRef.current;
     const map = mapCanvasRef.current;
-    if (!target || !hud || !map) return;
+    if (!target || !map) return;
     target.imageSmoothingEnabled = false;
     target.fillStyle = '#05080d';
     target.fillRect(0, 0, 256, 144);
