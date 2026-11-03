@@ -81,6 +81,8 @@ export default function App() {
   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
+  /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
+  const forceRoomRef = useRef(-1);
   const currentRoomRef = useRef(8);
   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
   const lastFlashPhaseRef = useRef(false);
@@ -273,7 +275,13 @@ export default function App() {
     const canvas = mapCanvasRef.current;
     const ctx = canvas?.getContext('2d', { alpha: false });
     const previousRoom = currentRoomRef.current;
+    /* On the frame a transition happens, the entered room's screen is still a stale
+       copy of the room just left (its enemies and the player included). Do not paint
+       it; the next frame always carries the entered room's real screen. */
+    let staleRoom = -1;
     if (message.currentRoom !== previousRoom) {
+      staleRoom = message.currentRoom;
+      forceRoomRef.current = message.currentRoom;
       if (hasStartedRef.current) {
         if (!visitedRoomsRef.current[previousRoom]) {
           visitedRoomsRef.current[previousRoom] = true;
@@ -297,6 +305,7 @@ export default function App() {
     if (ctx) {
       const flashPhase = ((Math.floor(performance.now() / 320) & 1) === 1);
       for (const item of message.dirty) {
+        if (item.room === staleRoom) continue;
         const screen = new Uint8Array(item.screen);
         screenCacheRef.current[item.room] = screen;
         flashRoomsRef.current[item.room] = spectrumScreenHasFlash(screen);
@@ -309,6 +318,7 @@ export default function App() {
         lastFlashPhaseRef.current = flashPhase;
       } else {
         for (const item of message.dirty) {
+          if (item.room === staleRoom) continue;
           const screen = screenCacheRef.current[item.room];
           if (screen) paintSpectrumRoom(ctx, item.room, screen, flashPhase);
         }
@@ -317,9 +327,10 @@ export default function App() {
     const hud = hudCanvasRef.current?.getContext('2d');
     const activeScreen = screenCacheRef.current[message.currentRoom];
     if (hud) {
-      if (activeScreen) paintSpectrumHud(hud, activeScreen);
-      else hud.clearRect(0, 0, 256, 48);
+      if (activeScreen && staleRoom < 0) paintSpectrumHud(hud, activeScreen);
+      else if (staleRoom < 0) hud.clearRect(0, 0, 256, 48); /* keep the previous HUD for the transition frame */
     }
+    if (staleRoom < 0 && forceRoomRef.current >= 0) forceRoomRef.current = -1;
     if (message.gameOver) {
       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
       initialPreviewTimerRef.current = null;
@@ -444,7 +455,7 @@ export default function App() {
       frame.tickDone.add(message.workerIndex);
       if (frame.tickDone.size === workers.length) {
         frame.phase = 'collect';
-        for (const worker of workers) worker.postMessage({ type: 'collect', frameId: frame.id });
+        for (const worker of workers) worker.postMessage({ type: 'collect', frameId: frame.id, forceRoom: forceRoomRef.current });
       }
     } else if (message.type === 'collected' && frame.phase === 'collect') {
       frame.collectDone.add(message.workerIndex);

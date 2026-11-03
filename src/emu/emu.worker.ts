@@ -5,7 +5,7 @@ type InitMessage = { type: 'init'; snapshot: ArrayBuffer; rom: ArrayBuffer; chea
 type KeyMessage = { type: 'keys'; rows: number[] };
 type BeginMessage = { type: 'begin'; frameId: number };
 type TickMessage = { type: 'tick'; frameId: number; backgroundDivisor: number; minCol: number; maxCol: number; minRow: number; maxRow: number };
-type CollectMessage = { type: 'collect'; frameId: number };
+type CollectMessage = { type: 'collect'; frameId: number; forceRoom?: number };
 type DebugMessage = { type: 'debug-capture'; captureId: number };
 type Incoming = ModuleMessage | InitMessage | KeyMessage | BeginMessage | TickMessage | CollectMessage | DebugMessage | { type: 'stop' };
 
@@ -67,13 +67,14 @@ function initialise(message: InitMessage) {
   scope.postMessage({ type: 'ready', roomCount: e.emu_room_count(), currentRoom: e.emu_current_room() });
 }
 
-function collect(frameId: number) {
+function collect(frameId: number, forceRoom = -1) {
   if (!wasm || !memory) return;
   const e = wasm as Record<string, any>;
   const heap = new Uint8Array(memory.buffer);
   const dirty: { room: number; screen: ArrayBuffer }[] = [];
   for (let room = rangeStart; room < rangeEnd; room++) {
-    if (e.emu_take_dirty(room)) {
+    /* take_dirty must always run so the flag is cleared; forceRoom sends the screen even if it is not dirty. */
+    if (e.emu_take_dirty(room) || room === forceRoom) {
       const ptr = e.emu_screen_ptr(room) >>> 0;
       dirty.push({ room, screen: heap.slice(ptr, ptr + 6912).buffer });
     }
@@ -105,7 +106,7 @@ scope.onmessage = (event: MessageEvent<Incoming>) => {
       (wasm as Record<string, any>).emu_tick_range(rangeStart, rangeEnd, 50, message.frameId, message.backgroundDivisor, message.minCol, message.maxCol, message.minRow, message.maxRow);
       scope.postMessage({ type: 'tick-done', frameId: message.frameId, workerIndex });
     } else if (message.type === 'collect') {
-      collect(message.frameId);
+      collect(message.frameId, message.forceRoom ?? -1);
     } else if (message.type === 'debug-capture' && wasm && memory) {
       const e = wasm as Record<string, any>;
       const heap = new Uint8Array(memory.buffer);
