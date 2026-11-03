@@ -1,0 +1,3338 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+The content has been processed where empty lines have been removed, line numbers have been added.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: src/**/*, package.json, tsconfig.json, vite.config.*
+- Files matching these patterns are excluded: **/*.glb, **/*.gltf, **/*.obj, **/*.fbx, **/*.bin, **/*.draco, **/*.hdr, **/*.exr, **/*.png, **/*.jpg, **/*.jpeg, **/*.webp, **/*.svg, **/*.ico, **/*.mp3, **/*.ogg, **/*.wav, **/*.mp4, public/**, dist/**, build/**, package-lock.json, pnpm-lock.yaml, yarn.lock, .env*, **/*.map
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Empty lines have been removed from all files
+- Line numbers have been added to the beginning of each line
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+src/
+  emu/
+    bridge.c
+    emu.worker.ts
+    Z80-support.h
+    Z80.c
+    Z80.h
+  App.tsx
+  main.tsx
+  spectrum.ts
+  style.css
+  vite-env.d.ts
+package.json
+tsconfig.json
+vite.config.ts
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="src/emu/Z80-support.h">
+  1: #ifndef _Z80_support_H
+  2: #define _Z80_support_H
+  3: #ifndef CPU_Z80_STATIC
+  4: #	define CPU_Z80_STATIC
+  5: #endif
+  6: #include <stddef.h>
+  7: /* <Z/constants/base.h> */
+  8: #ifndef NULL
+  9: #	ifdef __cplusplus
+ 10: #		define NULL 0
+ 11: #	else
+ 12: #		define NULL ((void *)0)
+ 13: #	endif
+ 14: #endif
+ 15: #ifndef TRUE
+ 16: #	define TRUE 1
+ 17: #endif
+ 18: #ifndef FALSE
+ 19: #	define FALSE 0
+ 20: #endif
+ 21: /* Replacement for <Z/macros/language.h> */
+ 22: #if (defined(_WIN64) || defined(_WIN32)) && defined(_MSC_VER)
+ 23: #	define Z_API               __declspec(dllimport)
+ 24: #	define Z_API_EXPORT        __declspec(dllexport)
+ 25: #	define Z_STRICT_SIZE_BEGIN __pragma(pack(push, 1))
+ 26: #	define Z_STRICT_SIZE_END   __pragma(pack(pop))
+ 27: #	define Z_INLINE		   __forceinline
+ 28: #else
+ 29: #	define Z_API
+ 30: #	define Z_API_EXPORT
+ 31: #	define Z_STRICT_SIZE_BEGIN
+ 32: #	define Z_STRICT_SIZE_END   __attribute__((packed))
+ 33: #	define Z_INLINE            __inline__ __attribute__((always_inline))
+ 34: #endif
+ 35: #ifdef ofsetof
+ 36: #	define Z_OFFSET_OF ofsetof
+ 37: #else
+ 38: #	define Z_OFFSET_OF(type, member) (((size_t)&((type *)(1))->member) - 1)
+ 39: #endif
+ 40: #ifdef __cplusplus
+ 41: #	define Z_C_SYMBOLS_BEGIN extern "C" {
+ 42: #	define Z_C_SYMBOLS_END	 }
+ 43: #else
+ 44: #	define Z_C_SYMBOLS_BEGIN
+ 45: #	define Z_C_SYMBOLS_END
+ 46: #endif
+ 47: /* <Z/macros/pasting.h> */
+ 48: #define Z_EMPTY_(dummy)
+ 49: #define Z_EMPTY Z_EMPTY_(.)
+ 50: /* <Z/macros/pointer.h> */
+ 51: #define Z_BOP(type, base, offset) \
+ 52: 	((type)(((zuint8 *)(base)) + (offset)))
+ 53: /* <Z/macros/structure.h> */
+ 54: #define Z_DEFINE_STRICT_STRUCTURE_BEGIN Z_STRICT_SIZE_BEGIN typedef struct {
+ 55: #define Z_DEFINE_STRICT_STRUCTURE_END   } Z_STRICT_SIZE_END
+ 56: #define Z_DEFINE_STRICT_UNION_BEGIN     Z_STRICT_SIZE_BEGIN typedef union {
+ 57: #define Z_DEFINE_STRICT_UNION_END       } Z_STRICT_SIZE_END
+ 58: /* <Z/macros/value.h> */
+ 59: #define Z_8BIT_ROTATE_LEFT(value, rotation) \
+ 60: 	(((value) << (rotation)) | ((value) >> (8 - (rotation))))
+ 61: #define Z_8BIT_ROTATE_RIGHT(value, rotation) \
+ 62: 	(((value) >> (rotation)) | ((value) << (8 - (rotation))))
+ 63: /* Replacement for <Z/types/base.h> (little-endian only implementation) */
+ 64: #if (defined(_WIN64) || defined(_WIN32)) && defined(_MSC_VER)
+ 65: #	define Z_UINT32(value) value##U
+ 66: #	if _MSC_VER < 1300
+ 67: 		typedef unsigned char      zuint8;
+ 68: 		typedef unsigned short int zuint16;
+ 69: 		typedef unsigned int       zuint32;
+ 70: 		typedef signed char        zsint8;
+ 71: 		typedef signed short int   zsint16;
+ 72: 		typedef signed int         zsint32;
+ 73: #	else
+ 74: 		typedef unsigned __int8  zuint8;
+ 75: 		typedef unsigned __int16 zuint16;
+ 76: 		typedef unsigned __int32 zuint32;
+ 77: 		typedef signed __int8    zsint8;
+ 78: 		typedef signed __int16   zsint16;
+ 79: 		typedef signed __int32   zsint32;
+ 80: #	endif
+ 81: #else
+ 82: #	include <stdint.h>
+ 83: 	typedef uint8_t  zuint8;
+ 84: 	typedef uint16_t zuint16;
+ 85: 	typedef uint32_t zuint32;
+ 86: 	typedef int8_t   zsint8;
+ 87: 	typedef int16_t  zsint16;
+ 88: 	typedef int32_t  zsint32;
+ 89: #	define Z_UINT32 UINT32_C
+ 90: #endif
+ 91: typedef unsigned int zuint;
+ 92: typedef signed int   zsint;
+ 93: typedef size_t       zusize;
+ 94: typedef zuint8       zboolean;
+ 95: Z_DEFINE_STRICT_UNION_BEGIN
+ 96: 	zuint16 value_uint16;
+ 97: 	zsint16 value_sint16;
+ 98: 	zuint8	array_uint8[2];
+ 99: 	zsint8	array_sint8[2];
+100: 	struct {zuint8 index0;
+101: 		zuint8 index1;
+102: 	} values_uint8;
+103: 	struct {zsint8 index0;
+104: 		zsint8 index1;
+105: 	} values_sint8;
+106: Z_DEFINE_STRICT_UNION_END Z16Bit;
+107: Z_DEFINE_STRICT_UNION_BEGIN
+108: 	zuint32 value_uint32;
+109: 	zsint32 value_sint32;
+110: 	zuint16 array_uint16[2];
+111: 	zsint16 array_sint16[2];
+112: 	zuint8	array_uint8 [4];
+113: 	zsint8	array_sint8 [4];
+114: 	struct {zuint16 index0;
+115: 		zuint16 index1;
+116: 	} values_uint16;
+117: 	struct {zsint16 index0;
+118: 		zsint16 index1;
+119: 	} values_sint16;
+120: 	struct {zuint8 index0;
+121: 		zuint8 index1;
+122: 		zuint8 index2;
+123: 		zuint8 index3;
+124: 	} values_uint8;
+125: 	struct {zsint8 index0;
+126: 		zsint8 index1;
+127: 		zsint8 index2;
+128: 		zsint8 index3;
+129: 	} values_sint8;
+130: Z_DEFINE_STRICT_UNION_END Z32Bit;
+131: /* <Z/hardware/CPU/architecture/Z80.h> */
+132: #define Z_Z80_ADDRESS_NMI_POINTER 0x0066
+133: #define Z_Z80_VALUE_AFTER_POWER_ON_PC     0x0000
+134: #define Z_Z80_VALUE_AFTER_POWER_ON_SP     0xFFFF
+135: #define Z_Z80_VALUE_AFTER_POWER_ON_AF     0xFFFF
+136: #define Z_Z80_VALUE_AFTER_POWER_ON_BC     0xFFFF
+137: #define Z_Z80_VALUE_AFTER_POWER_ON_DE     0xFFFF
+138: #define Z_Z80_VALUE_AFTER_POWER_ON_HL     0xFFFF
+139: #define Z_Z80_VALUE_AFTER_POWER_ON_IX     0xFFFF
+140: #define Z_Z80_VALUE_AFTER_POWER_ON_IY     0xFFFF
+141: #define Z_Z80_VALUE_AFTER_POWER_ON_AF_    0xFFFF
+142: #define Z_Z80_VALUE_AFTER_POWER_ON_BC_    0xFFFF
+143: #define Z_Z80_VALUE_AFTER_POWER_ON_DE_    0xFFFF
+144: #define Z_Z80_VALUE_AFTER_POWER_ON_HL_    0xFFFF
+145: #define Z_Z80_VALUE_AFTER_POWER_ON_I      0x00
+146: #define Z_Z80_VALUE_AFTER_POWER_ON_R      0x00
+147: #define Z_Z80_VALUE_AFTER_POWER_ON_MEMPTR 0x0000
+148: #define Z_Z80_VALUE_AFTER_POWER_ON_IFF1   0
+149: #define Z_Z80_VALUE_AFTER_POWER_ON_IFF2   0
+150: #define Z_Z80_VALUE_AFTER_POWER_ON_IM     0
+151: #define Z_Z80_VALUE_AFTER_RESET_PC     Z_Z80_VALUE_AFTER_POWER_ON_PC
+152: #define Z_Z80_VALUE_AFTER_RESET_SP     Z_Z80_VALUE_AFTER_POWER_ON_SP
+153: #define Z_Z80_VALUE_AFTER_RESET_AF     Z_Z80_VALUE_AFTER_POWER_ON_AF
+154: #define Z_Z80_VALUE_AFTER_RESET_BC     Z_Z80_VALUE_AFTER_POWER_ON_BC
+155: #define Z_Z80_VALUE_AFTER_RESET_DE     Z_Z80_VALUE_AFTER_POWER_ON_DE
+156: #define Z_Z80_VALUE_AFTER_RESET_HL     Z_Z80_VALUE_AFTER_POWER_ON_HL
+157: #define Z_Z80_VALUE_AFTER_RESET_IX     Z_Z80_VALUE_AFTER_POWER_ON_IX
+158: #define Z_Z80_VALUE_AFTER_RESET_IY     Z_Z80_VALUE_AFTER_POWER_ON_IY
+159: #define Z_Z80_VALUE_AFTER_RESET_AF_    Z_Z80_VALUE_AFTER_POWER_ON_AF_
+160: #define Z_Z80_VALUE_AFTER_RESET_BC_    Z_Z80_VALUE_AFTER_POWER_ON_BC_
+161: #define Z_Z80_VALUE_AFTER_RESET_DE_    Z_Z80_VALUE_AFTER_POWER_ON_DE_
+162: #define Z_Z80_VALUE_AFTER_RESET_HL_    Z_Z80_VALUE_AFTER_POWER_ON_HL_
+163: #define Z_Z80_VALUE_AFTER_RESET_I      Z_Z80_VALUE_AFTER_POWER_ON_I
+164: #define Z_Z80_VALUE_AFTER_RESET_R      Z_Z80_VALUE_AFTER_POWER_ON_R
+165: #define Z_Z80_VALUE_AFTER_RESET_MEMPTR Z_Z80_VALUE_AFTER_POWER_ON_MEMPTR
+166: #define Z_Z80_VALUE_AFTER_RESET_IFF1   Z_Z80_VALUE_AFTER_POWER_ON_IFF1
+167: #define Z_Z80_VALUE_AFTER_RESET_IFF2   Z_Z80_VALUE_AFTER_POWER_ON_IFF2
+168: #define Z_Z80_VALUE_AFTER_RESET_IM     Z_Z80_VALUE_AFTER_POWER_ON_IM
+169: #define Z_Z80_RESET_IS_EQUAL_TO_POWER_ON TRUE
+170: Z_DEFINE_STRICT_STRUCTURE_BEGIN
+171: 	zuint16 pc,  sp;
+172: 	Z16Bit  af,  bc,  de,  hl,  ix, iy;
+173: 	Z16Bit  af_, bc_, de_, hl_;
+174: 	zuint8  r,   i;
+175: 	zuint16 memptr;
+176: 	struct {zuint8 halt :1;
+177: 		zuint8 irq  :1;
+178: 		zuint8 nmi  :1;
+179: 		zuint8 iff1 :1;
+180: 		zuint8 iff2 :1;
+181: 		zuint8 ei   :1;
+182: 		zuint8 im   :2;
+183: 	} internal;
+184: Z_DEFINE_STRICT_STRUCTURE_END ZZ80State;
+185: #define Z_Z80_STATE_AF(    object) (object)->af.value_uint16
+186: #define Z_Z80_STATE_BC(    object) (object)->bc.value_uint16
+187: #define Z_Z80_STATE_DE(    object) (object)->de.value_uint16
+188: #define Z_Z80_STATE_HL(    object) (object)->hl.value_uint16
+189: #define Z_Z80_STATE_IX(    object) (object)->ix.value_uint16
+190: #define Z_Z80_STATE_IY(    object) (object)->iy.value_uint16
+191: #define Z_Z80_STATE_PC(    object) (object)->pc
+192: #define Z_Z80_STATE_SP(    object) (object)->sp
+193: #define Z_Z80_STATE_AF_(   object) (object)->af_.value_uint16
+194: #define Z_Z80_STATE_BC_(   object) (object)->bc_.value_uint16
+195: #define Z_Z80_STATE_DE_(   object) (object)->de_.value_uint16
+196: #define Z_Z80_STATE_HL_(   object) (object)->hl_.value_uint16
+197: #define Z_Z80_STATE_A(     object) (object)->af.values_uint8.index1
+198: #define Z_Z80_STATE_F(     object) (object)->af.values_uint8.index0
+199: #define Z_Z80_STATE_B(     object) (object)->bc.values_uint8.index1
+200: #define Z_Z80_STATE_C(     object) (object)->bc.values_uint8.index0
+201: #define Z_Z80_STATE_D(     object) (object)->de.values_uint8.index1
+202: #define Z_Z80_STATE_E(     object) (object)->de.values_uint8.index0
+203: #define Z_Z80_STATE_H(     object) (object)->hl.values_uint8.index1
+204: #define Z_Z80_STATE_L(     object) (object)->hl.values_uint8.index0
+205: #define Z_Z80_STATE_IXH(   object) (object)->ix.values_uint8.index1
+206: #define Z_Z80_STATE_IXL(   object) (object)->ix.values_uint8.index0
+207: #define Z_Z80_STATE_IYH(   object) (object)->iy.values_uint8.index1
+208: #define Z_Z80_STATE_IYL(   object) (object)->iy.values_uint8.index0
+209: #define Z_Z80_STATE_A_(    object) (object)->af_.values_uint8.index1
+210: #define Z_Z80_STATE_F_(    object) (object)->af_.values_uint8.index0
+211: #define Z_Z80_STATE_B_(    object) (object)->bc_.values_uint8.index1
+212: #define Z_Z80_STATE_C_(    object) (object)->bc_.values_uint8.index0
+213: #define Z_Z80_STATE_D_(    object) (object)->de_.values_uint8.index1
+214: #define Z_Z80_STATE_E_(    object) (object)->de_.values_uint8.index0
+215: #define Z_Z80_STATE_H_(    object) (object)->hl_.values_uint8.index1
+216: #define Z_Z80_STATE_L_(    object) (object)->hl_.values_uint8.index0
+217: #define Z_Z80_STATE_I(     object) (object)->i
+218: #define Z_Z80_STATE_R(     object) (object)->r
+219: #define Z_Z80_STATE_MEMPTR(object) (object)->memptr
+220: #define Z_Z80_STATE_HALT(  object) (object)->internal.halt
+221: #define Z_Z80_STATE_IFF1(  object) (object)->internal.iff1
+222: #define Z_Z80_STATE_IFF2(  object) (object)->internal.iff2
+223: #define Z_Z80_STATE_EI(    object) (object)->internal.ei
+224: #define Z_Z80_STATE_IM(    object) (object)->internal.im
+225: #define Z_Z80_STATE_NMI(   object) (object)->internal.nmi
+226: #define Z_Z80_STATE_IRQ(   object) (object)->internal.irq
+227: #define Z_Z80_STATE_MEMBER_AF     af.value_uint16
+228: #define Z_Z80_STATE_MEMBER_BC     bc.value_uint16
+229: #define Z_Z80_STATE_MEMBER_DE     de.value_uint16
+230: #define Z_Z80_STATE_MEMBER_HL     hl.value_uint16
+231: #define Z_Z80_STATE_MEMBER_IX     ix.value_uint16
+232: #define Z_Z80_STATE_MEMBER_IY     iy.value_uint16
+233: #define Z_Z80_STATE_MEMBER_PC     pc
+234: #define Z_Z80_STATE_MEMBER_SP     sp
+235: #define Z_Z80_STATE_MEMBER_AF_    af_.value_uint16
+236: #define Z_Z80_STATE_MEMBER_BC_    bc_.value_uint16
+237: #define Z_Z80_STATE_MEMBER_DE_    de_.value_uint16
+238: #define Z_Z80_STATE_MEMBER_HL_    hl_.value_uint16
+239: #define Z_Z80_STATE_MEMBER_A      af.values_uint8.index1
+240: #define Z_Z80_STATE_MEMBER_F      af.values_uint8.index0
+241: #define Z_Z80_STATE_MEMBER_B      bc.values_uint8.index1
+242: #define Z_Z80_STATE_MEMBER_C      bc.values_uint8.index0
+243: #define Z_Z80_STATE_MEMBER_D      de.values_uint8.index1
+244: #define Z_Z80_STATE_MEMBER_E      de.values_uint8.index0
+245: #define Z_Z80_STATE_MEMBER_H      hl.values_uint8.index1
+246: #define Z_Z80_STATE_MEMBER_L      hl.values_uint8.index0
+247: #define Z_Z80_STATE_MEMBER_IXH    ix.values_uint8.index1
+248: #define Z_Z80_STATE_MEMBER_IXL    ix.values_uint8.index0
+249: #define Z_Z80_STATE_MEMBER_IYH    iy.values_uint8.index1
+250: #define Z_Z80_STATE_MEMBER_IYL    iy.values_uint8.index0
+251: #define Z_Z80_STATE_MEMBER_A_     af_.values_uint8.index1
+252: #define Z_Z80_STATE_MEMBER_F_     af_.values_uint8.index0
+253: #define Z_Z80_STATE_MEMBER_B_     bc_.values_uint8.index1
+254: #define Z_Z80_STATE_MEMBER_C_     bc_.values_uint8.index0
+255: #define Z_Z80_STATE_MEMBER_D_     de_.values_uint8.index1
+256: #define Z_Z80_STATE_MEMBER_E_     de_.values_uint8.index0
+257: #define Z_Z80_STATE_MEMBER_H_     hl_.values_uint8.index1
+258: #define Z_Z80_STATE_MEMBER_L_     hl_.values_uint8.index0
+259: #define Z_Z80_STATE_MEMBER_I      i
+260: #define Z_Z80_STATE_MEMBER_R      r
+261: #define Z_Z80_STATE_MEMPTR_MEMPTR memptr
+262: #define Z_Z80_STATE_MEMBER_HALT   internal.halt
+263: #define Z_Z80_STATE_MEMBER_IFF1   internal.iff1
+264: #define Z_Z80_STATE_MEMBER_IFF2   internal.iff2
+265: #define Z_Z80_STATE_MEMBER_EI     internal.ei
+266: #define Z_Z80_STATE_MEMBER_IM     internal.im
+267: #define Z_Z80_STATE_MEMBER_NMI    internal.nmi
+268: #define Z_Z80_STATE_MEMBER_IRQ    internal.irq
+269: #endif /* _Z80_support_H */
+</file>
+
+<file path="src/emu/Z80.c">
+   1: /*  ______   ______  ______
+   2:    /\___  \ /\  __ \/\     \
+   3:    \/__/  /_\ \  __ \ \  \  \
+   4:       /\_____\ \_____\ \_____\
+   5: Zilog \/_____/\/_____/\/_____/ CPU Emulator
+   6: Copyright (C) 1999-2018 Manuel Sainz de Baranda y Goñi.
+   7: This emulator is free software: you can redistribute it and/or modify it under
+   8: the terms of the GNU General Public License as published  by the Free Software
+   9: Foundation, either  version 3 of  the License, or  (at your option)  any later
+  10: version.
+  11: This emulator is distributed  in the hope that it will  be useful, but WITHOUT
+  12: ANY WARRANTY; without even the  implied warranty of MERCHANTABILITY or FITNESS
+  13: FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+  14: You should have received  a copy of the GNU General Public License  along with
+  15: this emulator. If not, see <http://www.gnu.org/licenses/>. */
+  16: #ifndef CPU_Z80_DEPENDENCIES_H
+  17: #	include <Z/macros/value.h>
+  18: #	include <Z/macros/pointer.h>
+  19: #endif
+  20: #if defined(CPU_Z80_HIDE_API)
+  21: #	define CPU_Z80_API static
+  22: #elif defined(CPU_Z80_STATIC)
+  23: #	define CPU_Z80_API
+  24: #else
+  25: #	define CPU_Z80_API Z_API_EXPORT
+  26: #endif
+  27: #if defined(CPU_Z80_WITH_MODULE_ABI) && !defined(CPU_Z80_WITH_ABI)
+  28: #	define CPU_Z80_WITH_ABI
+  29: #endif
+  30: #ifdef CPU_Z80_WITH_ABI
+  31: #	if defined(CPU_Z80_HIDE_ABI)
+  32: #		define CPU_Z80_ABI static
+  33: #	elif defined(CPU_Z80_STATIC)
+  34: #		define CPU_Z80_ABI
+  35: #	else
+  36: #		define CPU_Z80_ABI Z_API_EXPORT
+  37: #	endif
+  38: #endif
+  39: #if defined(CPU_Z80_USE_LOCAL_HEADER)
+  40: #	include "Z80.h"
+  41: #else
+  42: #	include <emulation/CPU/Z80.h>
+  43: #endif
+  44: /* MARK: - Types */
+  45: typedef zuint8 (* Instruction)(Z80 *object);
+  46: /* MARK: - Macros: External */
+  47: #define O(member)  Z_OFFSET_OF(Z80, member)
+  48: #define ROL(value) value = (zuint8)Z_8BIT_ROTATE_LEFT( value, 1)
+  49: #define ROR(value) value = (zuint8)Z_8BIT_ROTATE_RIGHT(value, 1)
+  50: /* MARK: - Macros & Functions: Callback */
+  51: #define READ_8(address)		object->read	(object->context, (zuint16)(address))
+  52: #define WRITE_8(address, value) object->write	(object->context, (zuint16)(address), (zuint8)(value))
+  53: #define IN(port)		object->in	(object->context, (zuint16)(port   ))
+  54: #define OUT(port, value)	object->out	(object->context, (zuint16)(port   ), (zuint8)(value))
+  55: #define INT_DATA		object->int_data(object->context)
+  56: #define READ_OFFSET(address)	((zsint8)READ_8(address))
+  57: #define SET_HALT		if (object->halt != NULL) object->halt(object->context, TRUE )
+  58: #define CLEAR_HALT		if (object->halt != NULL) object->halt(object->context, FALSE)
+  59: #define HOOK(address)		if (object->hook != NULL) object->hook(object->context, (address)) /* SNO */
+  60: static Z_INLINE zuint16 read_16bit(Z80 *object, zuint16 address)
+  61: 	{return (zuint16)(READ_8(address) | (zuint16)READ_8(address + 1) << 8);}
+  62: static Z_INLINE void write_16bit(Z80 *object, zuint16 address, zuint16 value)
+  63: 	{
+  64: 	WRITE_8(address, (zuint8)value);
+  65: 	WRITE_8(address + 1, value >> 8);
+  66: 	}
+  67: #define READ_16(address)	 read_16bit (object, (zuint16)(address))
+  68: #define WRITE_16(address, value) write_16bit(object, (zuint16)(address), (zuint16)(value))
+  69: /* MARK: - Macros: Registers */
+  70: #define AF    object->state.Z_Z80_STATE_MEMBER_AF
+  71: #define BC    object->state.Z_Z80_STATE_MEMBER_BC
+  72: #define DE    object->state.Z_Z80_STATE_MEMBER_DE
+  73: #define HL    object->state.Z_Z80_STATE_MEMBER_HL
+  74: #define IX    object->state.Z_Z80_STATE_MEMBER_IX
+  75: #define IY    object->state.Z_Z80_STATE_MEMBER_IY
+  76: #define PC    object->state.Z_Z80_STATE_MEMBER_PC
+  77: #define SP    object->state.Z_Z80_STATE_MEMBER_SP
+  78: #define AF_   object->state.Z_Z80_STATE_MEMBER_AF_
+  79: #define BC_   object->state.Z_Z80_STATE_MEMBER_BC_
+  80: #define DE_   object->state.Z_Z80_STATE_MEMBER_DE_
+  81: #define HL_   object->state.Z_Z80_STATE_MEMBER_HL_
+  82: #define A     object->state.Z_Z80_STATE_MEMBER_A
+  83: #define F     object->state.Z_Z80_STATE_MEMBER_F
+  84: #define B     object->state.Z_Z80_STATE_MEMBER_B
+  85: #define C     object->state.Z_Z80_STATE_MEMBER_C
+  86: #define L     object->state.Z_Z80_STATE_MEMBER_L
+  87: #define I     object->state.Z_Z80_STATE_MEMBER_I
+  88: #define R     object->state.Z_Z80_STATE_MEMBER_R
+  89: #define R_ALL ((R & 127) | (R7 & 128))
+  90: /* MARK: - Macros: Internal Bits */
+  91: #define HALT object->state.Z_Z80_STATE_MEMBER_HALT
+  92: #define IFF1 object->state.Z_Z80_STATE_MEMBER_IFF1
+  93: #define IFF2 object->state.Z_Z80_STATE_MEMBER_IFF2
+  94: #define EI   object->state.Z_Z80_STATE_MEMBER_EI
+  95: #define IM   object->state.Z_Z80_STATE_MEMBER_IM
+  96: #define NMI  object->state.Z_Z80_STATE_MEMBER_NMI
+  97: #define INT  object->state.Z_Z80_STATE_MEMBER_IRQ
+  98: /* MARK: - Macros: Temporal Data */
+  99: #define CYCLES	    object->cycles
+ 100: #define R7	    object->r7
+ 101: #define BYTE(index) object->data.array_uint8[index]
+ 102: #define BYTE0	    BYTE(0)
+ 103: #define BYTE1	    BYTE(1)
+ 104: #define BYTE2	    BYTE(2)
+ 105: #define BYTE3	    BYTE(3)
+ 106: #define XY	    object->xy.value_uint16
+ 107: #define XY_ADDRESS  ((zuint16)(XY + object->data.array_sint8[2]))
+ 108: /* MARK: - Macros: Flags */
+ 109: #define SF 128
+ 110: #define ZF  64
+ 111: #define YF  32
+ 112: #define HF  16
+ 113: #define XF   8
+ 114: #define PF   4
+ 115: #define NF   2
+ 116: #define CF   1
+ 117: #define SZPF (SF | ZF | PF)
+ 118: #define SYXF (SF | YF | XF)
+ 119: #define ZPF  (ZF | PF	  )
+ 120: #define YXCF (YF | XF | CF)
+ 121: #define YXF  (YF | XF	  )
+ 122: #define PNF  (PF | NF	  )
+ 123: #define HCF  (HF | CF	  )
+ 124: #define F_H   (F &   HF)
+ 125: #define F_N   (F &   NF)
+ 126: #define F_C   (F &   CF)
+ 127: #define F_SZP (F & SZPF)
+ 128: #define A_SYX (A & SYXF)
+ 129: #define A_YX  (A &  YXF)
+ 130: #define ZF_ZERO(value) (!(value) << 6)
+ 131: /* MARK: - P/V Flag Computation */
+ 132: static zuint8 const pf_parity_table[256] = {
+ 133: /*	0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F */
+ 134: /* 0 */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 135: /* 1 */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 136: /* 2 */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 137: /* 3 */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 138: /* 4 */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 139: /* 5 */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 140: /* 6 */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 141: /* 7 */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 142: /* 8 */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 143: /* 9 */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 144: /* A */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 145: /* B */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 146: /* C */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4,
+ 147: /* D */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 148: /* E */ 0, 4, 4, 0, 4, 0, 0, 4, 4, 0, 0, 4, 0, 4, 4, 0,
+ 149: /* F */ 4, 0, 0, 4, 0, 4, 4, 0, 0, 4, 4, 0, 4, 0, 0, 4
+ 150: };
+ 151: #define PF_PARITY(value) pf_parity_table[value]
+ 152: #define VF(function, operand)						 \
+ 153: static Z_INLINE zuint8 pf_overflow_##function##8(zuint8 a, zuint8 b)	 \
+ 154: 	{								 \
+ 155: 	zsint total = ((zsint)((zsint8)a)) operand ((zsint)((zsint8)b)); \
+ 156: 									 \
+ 157: 	return total < -128 || total > 127 ? PF : 0;			 \
+ 158: 	}
+ 159: VF(add, +)
+ 160: VF(sub, -)
+ 161: #undef	VF
+ 162: #define VF(function, bits, type, operand, minimum, maximum)					\
+ 163: static Z_INLINE zuint8 pf_overflow_##function##bits(zuint##bits a, zuint##bits b, zuint8 carry) \
+ 164: 	{											\
+ 165: 	type total = ((type)((zsint##bits)a)) operand ((type)((zsint##bits)b)) operand carry;	\
+ 166: 												\
+ 167: 	return total < minimum || total > maximum ? PF : 0;					\
+ 168: 	}
+ 169: VF(adc,  8, zsint,   +,   -128,   127)
+ 170: VF(sbc,  8, zsint,   -,   -128,   127)
+ 171: VF(adc, 16, zsint32, +, -32768, 32767)
+ 172: VF(sbc, 16, zsint32, -, -32768, 32767)
+ 173: /* MARK: - 8-Bit Register Resolution
+ 174:    .----------.   .---------.   .-----------.	.-----------.
+ 175:    | 76543210 |   |  X / Y  |   |   J / K   |	|   P / Q   |
+ 176:    |----------|   |---------|   |-----------|	|-----------|
+ 177:    | __xxx___ |   | 000 = b |   | 000 = b   |	| 000 = b   |
+ 178:    | _____yyy |   | 001 = c |   | 001 = c   |	| 001 = c   |
+ 179:    | __jjj___ |   | 010 = d |   | 010 = d   |	| 010 = d   |
+ 180:    | _____kkk |   | 011 = e |   | 011 = e   |	| 011 = e   |
+ 181:    | __ppp___ |   | 100 = h |   | 100 = ixh |	| 100 = iyh |
+ 182:    | _____qqq |   | 101 = l |   | 101 = ixl |	| 101 = iyl |
+ 183:    '----------'   | 111 = a |   | 111 = a   |	| 111 = a   |
+ 184: 		  '---------'   '-----------'	'----------*/
+ 185: static zuint8 const x_y_table[8] = {
+ 186: 	O(state.Z_Z80_STATE_MEMBER_B),
+ 187: 	O(state.Z_Z80_STATE_MEMBER_C),
+ 188: 	O(state.Z_Z80_STATE_MEMBER_D),
+ 189: 	O(state.Z_Z80_STATE_MEMBER_E),
+ 190: 	O(state.Z_Z80_STATE_MEMBER_H),
+ 191: 	O(state.Z_Z80_STATE_MEMBER_L),
+ 192: 	0,
+ 193: 	O(state.Z_Z80_STATE_MEMBER_A)
+ 194: };
+ 195: static zuint8 const j_k_p_q_table[8] = {
+ 196: 	O(state.Z_Z80_STATE_MEMBER_B),
+ 197: 	O(state.Z_Z80_STATE_MEMBER_C),
+ 198: 	O(state.Z_Z80_STATE_MEMBER_D),
+ 199: 	O(state.Z_Z80_STATE_MEMBER_E),
+ 200: 	O(xy.values_uint8.index1    ),
+ 201: 	O(xy.values_uint8.index0    ),
+ 202: 	0,
+ 203: 	O(state.Z_Z80_STATE_MEMBER_A)
+ 204: };
+ 205: #define R_8(name, table, offset, mask, shift) \
+ 206: static Z_INLINE zuint8 *name(Z80 *object)     \
+ 207: 	{return ((zuint8 *)object) + table[(BYTE(offset) & mask) shift];}
+ 208: R_8(__xxx___0,	   x_y_table, 0, 56, >> 3   )
+ 209: R_8(__xxx___1,	   x_y_table, 1, 56, >> 3   )
+ 210: R_8(_____yyy0,	   x_y_table, 0,  7, Z_EMPTY)
+ 211: R_8(_____yyy1,	   x_y_table, 1,  7, Z_EMPTY)
+ 212: R_8(_____yyy3,	   x_y_table, 3,  7, Z_EMPTY)
+ 213: R_8(__jjj___ , j_k_p_q_table, 1, 56, >> 3   )
+ 214: R_8(_____kkk , j_k_p_q_table, 1,  7, Z_EMPTY)
+ 215: /* MARK: - 16-Bit Register Resolution
+ 216:    .----------.   .---------.	.---------.   .---------.
+ 217:    | 76543210 |   |    S    |	|    T    |   |    W	|
+ 218:    |----------|   |---------|	|---------|   |---------|
+ 219:    | __ss____ |   | 00 = bc |	| 00 = bc |   | 00 = bc |
+ 220:    | __tt____ |   | 01 = de |	| 01 = de |   | 01 = de |
+ 221:    '----------'   | 10 = hl |	| 10 = hl |   | 10 = XY |
+ 222: 		  | 11 = sp |	| 11 = af |   | 11 = sp |
+ 223: 		  '---------'	'---------'   '--------*/
+ 224: static zuint8 const s_table[4] = {
+ 225: 	O(state.Z_Z80_STATE_MEMBER_BC),
+ 226: 	O(state.Z_Z80_STATE_MEMBER_DE),
+ 227: 	O(state.Z_Z80_STATE_MEMBER_HL),
+ 228: 	O(state.Z_Z80_STATE_MEMBER_SP)
+ 229: };
+ 230: static zuint8 const t_table[4] = {
+ 231: 	O(state.Z_Z80_STATE_MEMBER_BC),
+ 232: 	O(state.Z_Z80_STATE_MEMBER_DE),
+ 233: 	O(state.Z_Z80_STATE_MEMBER_HL),
+ 234: 	O(state.Z_Z80_STATE_MEMBER_AF)
+ 235: };
+ 236: static zuint8 const w_table[4] = {
+ 237: 	O(state.Z_Z80_STATE_MEMBER_BC),
+ 238: 	O(state.Z_Z80_STATE_MEMBER_DE),
+ 239: 	O(xy			     ),
+ 240: 	O(state.Z_Z80_STATE_MEMBER_SP)
+ 241: };
+ 242: #define R_16(name, table, offset)	   \
+ 243: static Z_INLINE zuint16 *name(Z80 *object) \
+ 244: 	{return Z_BOP(zuint16 *, object, table[(BYTE(offset) & 48) >> 4]);}
+ 245: R_16(__ss____0, s_table, 0)
+ 246: R_16(__ss____1, s_table, 1)
+ 247: R_16(__tt____ , t_table, 0)
+ 248: /* MARK: - Condition Resolution
+ 249:    .----------.   .----------.
+ 250:    | 76543210 |   |	Z    |
+ 251:    |----------|   |----------|
+ 252:    | __zzz___ |   | 000 = nz |
+ 253:    | ___zz___ |   | 001 = z  |
+ 254:    '----------'   | 010 = nc |
+ 255: 		  | 011 = c  |
+ 256: 		  | 100 = po |
+ 257: 		  | 101 = pe |
+ 258: 		  | 110 = p  |
+ 259: 		  | 111 = m  |
+ 260: 		  '---------*/
+ 261: static zuint8 const z_table[8] = {ZF, ZF, CF, CF, PF, PF, SF, SF};
+ 262: static Z_INLINE zboolean __zzz___(Z80 *object)
+ 263: 	{
+ 264: 	zuint8 z = (BYTE0 & 56) >> 3;
+ 265: 	return (F & (z_table[z]))
+ 266: 		?  (z & 1)  /* Flag is 1 */
+ 267: 		: !(z & 1); /* Flag is 0 */
+ 268: 	}
+ 269: /* MARK: - 8-Bit Arithmetic and Logical Operation Resolution and Execution
+ 270:    .----------.   .-----------.		.-------------------------------.
+ 271:    | 76543210 |   |	U     |		| S | Z | Y | H | X | P | N | C |
+ 272:    |----------|   |-----------|   .-----+---+---+---+---+---+---+---+---|
+ 273:    | __uuu___ |   | 000 = add |   | add | S | Z | 5 | H | 3 | V | 0 | C |
+ 274:    | _____vvv |   | 001 = adc |   |-----+---+---+---+---+---+---+---+---|
+ 275:    '----------'   | 010 = sub |   | adc | S | Z | 5 | H | 3 | V | 0 | C |
+ 276: 		  | 011 = sbc |   |-----+---+---+---+---+---+---+---+---|
+ 277: 		  | 100 = and |   | sub | S | Z | 5 | H | 3 | V | 1 | C |
+ 278: 		  | 101 = xor |   |-----+---+---+---+---+---+---+---+---|
+ 279: 		  | 110 = or  |   | sbc | S | Z | 5 | H | 3 | V | 1 | C |
+ 280: 		  | 111 = cp  |   |-----+---+---+---+---+---+---+---+---|
+ 281: 		  |-----------|   | and | S | Z | 5 | 1 | 3 | P | 0 | 0 |
+ 282: 		  |	V     |   |-----+---+---+---+---+---+---+---+---|
+ 283: 		  |-----------|   | xor | S | Z | 5 | 0 | 3 | P | 0 | 0 |
+ 284: 		  | 100 = inc |   |-----+---+---+---+---+---+---+---+---|
+ 285: 		  | 101 = dec |   | or  | S | Z | 5 | 0 | 3 | P | 0 | 0 |
+ 286: 		  '-----------'   |-----+---+---+---+---+---+---+---+---|
+ 287: 				  | cp  | S | Z |v.5| H |v.3| V | 1 | C |
+ 288: 				  |-----+---+---+---+---+---+---+---+---|
+ 289: 				  | inc | S | Z |v.5| H |v.3| V | 0 | . |
+ 290: 				  |-----+---+---+---+---+---+---+---+---|
+ 291: 				  | dec | S | Z |v.5| H |v.3| V | 1 | . |
+ 292: 				  '------------------------------------*/
+ 293: static void __uuu___(Z80 *object, zuint8 offset, zuint8 value)
+ 294: 	{
+ 295: 	zuint8 t;
+ 296: 	switch ((object->data.array_uint8[offset] >> 3) & 7)
+ 297: 		{
+ 298: 		case 0:	/* ADD */
+ 299: 		t = A + value;
+ 300: 		F =	((zuint)A + value > 255)     /* CF = Carry	*/
+ 301: 			| pf_overflow_add8(A, value) /* PF = Overflow	*/
+ 302: 			| ((A ^ value ^ t) & HF);    /* HF = Half-carry */
+ 303: 		A = t;				     /* NF = 0		*/
+ 304: 		break;
+ 305: 		case 1:	/* ADC */
+ 306: 		t = F_C;
+ 307: 		F =	((zuint)A + value + t > 255)		  /* CF = Carry	     */
+ 308: 			| pf_overflow_adc8(A, value, t)		  /* PF = Overflow   */
+ 309: 			| (((A & 0xF) + (value & 0xF) + t) & HF); /* HF = Half-carry */
+ 310: 								  /* NF = 0	     */
+ 311: 		A += value + t;
+ 312: 		break;
+ 313: 		case 2:	/* SUB */
+ 314: 		t = A - value;
+ 315: 		F =	(A < value)		     /* CF = Borrow	 */
+ 316: 			| NF			     /* NF = 1		 */
+ 317: 			| pf_overflow_sub8(A, value) /* PF = Overflow	 */
+ 318: 			| ((A ^ value ^ t) & HF);    /* HF = Half-Borrow */
+ 319: 		A = t;
+ 320: 		break;
+ 321: 		case 3: /* SBC */
+ 322: 		t = F_C;
+ 323: 		F =	((zsint)A - (zsint)value - (zsint)t < 0)  /* CF = Borrow      */
+ 324: 			| NF					  /* NF = 1	      */
+ 325: 			| pf_overflow_sbc8(A, value, t)		  /* PF = Overflow    */
+ 326: 			| (((A & 0xF) - (value & 0xF) - t) & HF); /* HF = Half-Borrow */
+ 327: 		A -= value + t;
+ 328: 		break;
+ 329: 		case 4: /* AND */
+ 330: 		A &= value;
+ 331: 		F = HF | PF_PARITY(A); /* HF = 1; PF = Parity */
+ 332: 		break;		       /* NF, CF = 0	      */
+ 333: 		case 5: /* XOR */
+ 334: 		A ^= value;
+ 335: 		F = PF_PARITY(A); /* PF = Parity    */
+ 336: 		break;		  /* HF, NF, CF = 0 */
+ 337: 		case 6: /* OR */
+ 338: 		A |= value;
+ 339: 		F = PF_PARITY(A); /* PF = Parity    */
+ 340: 		break;		  /* HF, NF, CF = 0 */
+ 341: 		case 7: /* CP */
+ 342: 		t = A - value;
+ 343: 		F = (zuint8)
+ 344: 			((A < value)		      /* CF = Borrow	    */
+ 345: 			 | NF			      /* NF = 1		    */
+ 346: 			 | pf_overflow_sub8(A, value) /* PF = Overflow	    */
+ 347: 			 | ((A ^ value ^ t) & HF)     /* HF = Half-Borrow   */
+ 348: 			 | (value & YXF)	      /* YF = v.5, XF = v.3 */
+ 349: 			 | ZF_ZERO(t)		      /* ZF = !(A - v)	    */
+ 350: 			 | (t & SF));		      /* SF = (A - v).7	    */
+ 351: 		return;
+ 352: 		}
+ 353: 	F = (zuint8)
+ 354: 		((F & (HF | PF | NF | CF)) /* CF, NF, PF and HF already changed */
+ 355: 		 | A_SYX		   /* SF = A.7; YF = A.5; XF = A.3	*/
+ 356: 		 | ZF_ZERO(A));		   /* ZF = !A				*/
+ 357: 	}
+ 358: static zuint8 _____vvv(Z80 *object, zuint8 offset, zuint8 value)
+ 359: 	{
+ 360: 	zuint8 t, pn;
+ 361: 	/* DEC */
+ 362: 	if (object->data.array_uint8[offset] & 1)
+ 363: 		{			      /* PF = Overflow */
+ 364: 		pn = value == 128 ? PNF : NF; /* NF = 1        */
+ 365: 		t = value - 1;
+ 366: 		}
+ 367: 	/* INC */
+ 368: 	else	{			    /* PF = Overflow */
+ 369: 		pn = value == 127 ? PF : 0; /* NF = 0	     */
+ 370: 		t = value + 1;
+ 371: 		}
+ 372: 	F = (zuint8)
+ 373: 		((F & CF)		  /* CF unchanged		  */
+ 374: 		 | pn			  /* PF and NF already calculated */
+ 375: 		 | (t & SYXF)		  /* SF = v.7; YF = v.5; XF = v.3 */
+ 376: 		 | ((value ^ 1 ^ t) & HF) /* HF = Half-Borrow		  */
+ 377: 		 | ZF_ZERO(t));		  /* ZF = !v			  */
+ 378: 	return t;
+ 379: 	}
+ 380: /* MARK: - Rotation and Shift Operation Resolution and Execution
+ 381:    .----------.   .-----------.
+ 382:    | 76543210 |   |	G     |
+ 383:    |----------|   |-----------|
+ 384:    | __ggg___ |   | 000 = rlc |
+ 385:    '----------'   | 001 = rrc |
+ 386: 		  | 010 = rl  |
+ 387: 		  | 011 = rr  |
+ 388: 		  | 100 = sla |
+ 389: 		  | 101 = sra |
+ 390: 		  | 110 = sll |
+ 391: 		  | 111 = srl |
+ 392: 		  '----------*/
+ 393: static zuint8 __ggg___(Z80 *object, zuint8 offset, zuint8 value)
+ 394: 	{
+ 395: 	zuint8 c;
+ 396: 	switch ((object->data.array_uint8[offset] >> 3) & 7)
+ 397: 		{
+ 398: 		/* RLC		 .----------------.
+ 399: 			.----.   |  .---------.   |
+ 400: 			| CF |<-----| 7 <-- 0 |<--'
+ 401: 			'----'	    '--------*/
+ 402: 		case 0:
+ 403: 		ROL(value);
+ 404: 		c = value & CF;
+ 405: 		break;
+ 406: 		/* RRC	.----------------.
+ 407: 			|   .---------.  |   .----.
+ 408: 			'-->| 7 --> 0 |----->| CF |
+ 409: 			    '---------'      '---*/
+ 410: 		case 1:
+ 411: 		c = value & CF;
+ 412: 		ROR(value);
+ 413: 		break;
+ 414: 		/* RL	.-------------------------.
+ 415: 			|  .----.   .---------.   |
+ 416: 			'--| CF |<--| 7 <-- 0 |<--'
+ 417: 			   '----'   '--------*/
+ 418: 		case 2:
+ 419: 		c = value >> 7;
+ 420: 		value = (zuint8)((value << 1) | F_C);
+ 421: 		break;
+ 422: 		/* RR	.-------------------------.
+ 423: 			|   .---------.   .----.  |
+ 424: 			'-->| 7 --> 0 |-->| CF |--'
+ 425: 			    '---------'   '---*/
+ 426: 		case 3:
+ 427: 		c = value & CF;
+ 428: 		value = (zuint8)((value >> 1) | (F_C << 7));
+ 429: 		break;
+ 430: 		/* SLA	.----.	 .---------.
+ 431: 			| CF |<--| 7 <-- 0 |<-- 0
+ 432: 			'----'	 '--------*/
+ 433: 		case 4:
+ 434: 		c = value >> 7;
+ 435: 		value <<= 1;
+ 436: 		break;
+ 437: 		/* SRA	    .---------.   .----.
+ 438: 			.-->| 7 --> 0 |-->| CF |
+ 439: 			|   '---------'   '----'
+ 440: 			|     |
+ 441: 			'----*/
+ 442: 		case 5:
+ 443: 		c = value & CF;
+ 444: 		value = (value & 128) | (value >> 1);
+ 445: 		break;
+ 446: 		/* SLL	.----.	 .---------.
+ 447: 			| CF |<--| 7 <-- 0 |<-- 1
+ 448: 			'----'	 '--------*/
+ 449: 		case 6:
+ 450: 		c = value >> 7;
+ 451: 		value = (value << 1) & 1;
+ 452: 		break;
+ 453: 		/* SRL	     .---------.   .----.
+ 454: 			0 -->| 7 --> 0 |-->| CF |
+ 455: 			     '---------'   '---*/
+ 456: 		case 7:
+ 457: 		c = value & CF;
+ 458: 		value >>= 1;
+ 459: 		break;
+ 460: 		/* Uncoment to Avoid a compiler warning */
+ 461: 		/*default: c = 0; break;*/
+ 462: 		}
+ 463: 	F = (zuint8)((value & SYXF) | ZF_ZERO(value) | PF_PARITY(value) | c);
+ 464: 	return value;
+ 465: 	}
+ 466: /* MARK: - Bit Set and Reset Operation Resolution and Execution
+ 467:    .----------.   .---------.
+ 468:    | 76543210 |   |    M    |
+ 469:    |----------|   |---------|
+ 470:    | _m______ |   | 0 = res |
+ 471:    '----------'   | 1 = set |
+ 472: 		  '--------*/
+ 473: static Z_INLINE zuint8 _m______(Z80 *object, zuint8 offset, zuint8 value)
+ 474: 	{
+ 475: 	zuint8 t = object->data.array_uint8[offset];
+ 476: 	return (zuint8)((t & 64)
+ 477: 		? value |  (1 << ((t & 56) >> 3))   /* SET */
+ 478: 		: value & ~(1 << ((t & 56) >> 3))); /* RES */
+ 479: 	}
+ 480: /* MARK: - Macros: Shortening */
+ 481: #define N(x)	  ((BYTE##x & 56) >> 3)
+ 482: #define X0	  (*__xxx___0(object))
+ 483: #define X1	  (*__xxx___1(object))
+ 484: #define Y0	  (*_____yyy0(object))
+ 485: #define Y1	  (*_____yyy1(object))
+ 486: #define Y3	  (*_____yyy3(object))
+ 487: #define JP	  (*__jjj___ (object))
+ 488: #define KQ	  (*_____kkk (object))
+ 489: #define SS0	  (*__ss____0(object))
+ 490: #define SS1	  (*__ss____1(object))
+ 491: #define TT	  (*__tt____ (object))
+ 492: #define Z	    __zzz___ (object)
+ 493: #define U0(value)   __uuu___ (object, 0, value)
+ 494: #define U1(value)   __uuu___ (object, 1, value)
+ 495: #define V0(value)   _____vvv (object, 0, value)
+ 496: #define V1(value)   _____vvv (object, 1, value)
+ 497: #define G1(value)   __ggg___ (object, 1, value)
+ 498: #define G3(value)   __ggg___ (object, 3, value)
+ 499: #define M1(value)   _m______ (object, 1, value)
+ 500: #define M3(value)   _m______ (object, 3, value)
+ 501: #define WW	  (*Z_BOP(zuint16 *, object, w_table[(BYTE1 >> 4) & 3]))
+ 502: /* MARK: - Macros & Functions: Reusable Code */
+ 503: #define INSTRUCTION(name) static zuint8 name(Z80 *object)
+ 504: #define EXIT_HALT	  if (HALT) {PC++; HALT = FALSE; CLEAR_HALT;}
+ 505: #define PUSH(value)	  WRITE_16(SP -= 2, value)
+ 506: #define LD_A_I_LD_A_R						  \
+ 507: 	F = (zuint8)	       /* HF = 0 / NF = 0	       */ \
+ 508: 		(A_SYX	       /* SF = A.7; YF = A.5; XF = A.3 */ \
+ 509: 		 | ZF_ZERO(A)  /* ZF = !A		       */ \
+ 510: 		 | (IFF2 << 2) /* PF = IFF2		       */ \
+ 511: 		 | F_C);       /* CF unchanged		       */
+ 512: #define EX(a, b) t = a; a = b; b = t;
+ 513: #define EX_VSP_X(register)	\
+ 514: 	t = READ_16(SP);	\
+ 515: 	WRITE_16(SP, register);	\
+ 516: 	register = t;
+ 517: #define LDX(operator)							   \
+ 518: 	zuint8 n;							   \
+ 519: 									   \
+ 520: 	PC += 2;							   \
+ 521: 	WRITE_8(DE operator, n = READ_8(HL operator));			   \
+ 522: 	n += A;								   \
+ 523: 									   \
+ 524: 	F = (zuint8)		      /* HF = 0, NF = 0			*/ \
+ 525: 		((F & (SF | ZF | CF)) /* SF, ZF, CF unchanged		*/ \
+ 526: 		 | ((n & 2) << 4)     /* YF = ([HL] + A).1		*/ \
+ 527: 		 | (n & XF)	      /* XF = ([HL] + A).3		*/ \
+ 528: 		 | (!!(--BC) << 2));  /* PF = 1 if BC != 0, else PF = 0 */
+ 529: #define LDXR(operator)	    \
+ 530: 	LDX(operator)	    \
+ 531: 	if (!BC) return 16; \
+ 532: 	PC -= 2; return 21;
+ 533: #define CPX(operator)						    \
+ 534: 	zuint8 v, n0, n1;					    \
+ 535: 								    \
+ 536: 	PC += 2;						    \
+ 537: 	n1 = (n0 = A - (v = READ_8(HL operator))) - !!F_H;	    \
+ 538: 								    \
+ 539: 	F = (zuint8)						    \
+ 540: 		((n0 & SF)	       /* SF = (A - [HL]).7	 */ \
+ 541: 		 | ZF_ZERO(n0)	       /* ZF = !(A - [HL])	 */ \
+ 542: 		 | ((A ^ v ^ n0) & HF) /* HF = borrow from bit 5 */ \
+ 543: 		 | ((n1 & 2) << 4)     /* YF = (A - [HL] - HF).1 */ \
+ 544: 		 | (n1 & XF)	       /* XF = (A - [HL] - HF).3 */ \
+ 545: 		 | (!!(--BC) << 2)     /* PF = !!BC		 */ \
+ 546: 		 | NF		       /* NF = 1		 */ \
+ 547: 		 | F_C);	       /* CF unchanged		 */
+ 548: #define CPXR(operator)		   \
+ 549: 	CPX(operator)		   \
+ 550: 	if (!BC || !n0) return 16; \
+ 551: 	PC -= 2;	return 21;
+ 552: static Z_INLINE void add_RR_NN(Z80 *object, zuint16 *r, zuint16 v)
+ 553: 	{
+ 554: 	zuint16 t = *r + v;
+ 555: 	F =	F_SZP			     /* SF, ZF, PF unchanged   */
+ 556: 		| ((t >> 8) & YXF)	     /* YF = RR.13; XF = RR.11 */
+ 557: 		| (((*r ^ v ^ t) >> 8) & HF) /* HF = RRh half-carry    */
+ 558: 		| ((zuint32)*r + v > 65535); /* CF = Carry	       */
+ 559: 	*r = t;				     /* NF = 0		       */
+ 560: 	}
+ 561: #define ADD_RR_NN(register, value) \
+ 562: 	add_RR_NN(object, (zuint16 *)&register, value);
+ 563: #define ADC_SBC_HL_SS(function, sign, cf_test, set_nf)								 \
+ 564: 	zuint8 c = F_C;												 \
+ 565: 	zuint16 v = SS1, t = HL sign v sign c;									 \
+ 566: 														 \
+ 567: 	F = (zuint8)												 \
+ 568: 		(((t >> 8) & SYXF)					/* SF = HL.15; YF = HL.13; XF = HL.11 */ \
+ 569: 		 | ZF_ZERO(t)						/* ZF = !HL			      */ \
+ 570: 		 | ((((HL & 0xFFF) sign (v & 0xFFF) sign c) >> 8) & HF) /* HF = Half-carry of H		      */ \
+ 571: 		 | pf_overflow_##function##16(HL, v, c)			/* PF = Overflow		      */ \
+ 572: 		 | !!(cf_test)						/* CF = Carry			      */ \
+ 573: 		 set_nf);						/* ADC: NF = 0; SBC: NF = 1	      */ \
+ 574: 														 \
+ 575: 	HL = t;													 \
+ 576: 	PC += 2;												 \
+ 577: 	return 15;
+ 578: #define RXA						  \
+ 579: 	F =	F_SZP  /* SF, ZF, PF unchanged	       */ \
+ 580: 		| A_YX /* YF = A.5; XF = A.3	       */ \
+ 581: 		| c;   /* CF = Ai.7 (rla) / Ai.0 (rra) */
+ 582: #define RXD(a, b, c)						   \
+ 583: 	zuint8 t;						   \
+ 584: 								   \
+ 585: 	PC += 2;						   \
+ 586: 	WRITE_8(HL, ((t = READ_8(HL)) a 4) | (A b));		   \
+ 587: 	A = (A & 0xF0) | (t c);					   \
+ 588: 								   \
+ 589: 	F = (zuint8)						   \
+ 590: 		(A_SYX		/* SF = A.7; YF = A.5; XF = A.3 */ \
+ 591: 		 | ZF_ZERO(A)	/* ZF = !A			*/ \
+ 592: 		 | PF_PARITY(A) /* PF = Parity of A		*/ \
+ 593: 		 | F_C);	/* CF unchanged			*/ \
+ 594: 				/* HF = 0, NF = 0;		*/
+ 595: #define BIT_N_VALUE(value)						   \
+ 596: 	zuint8 n = value & (1 << N(1));	/* SF = value.N && N == 7	*/ \
+ 597: 					/* ZF, PF = !value.N		*/ \
+ 598: 	F =	(n ? n & SYXF : ZPF)	/* YF = value.N && N == 5	*/ \
+ 599: 		| HF			/* HF = 1; NF = 0; CF unchanged	*/ \
+ 600: 		| F_C;			/* XF = value.N && N == 3	*/
+ 601: #define BIT_N_VADDRESS(address)					   \
+ 602: 	Z16Bit a;						   \
+ 603: 	zuint8 n = READ_8(a.value_uint16 = address) & (1 << N(3)); \
+ 604: 								   \
+ 605: 	F =	(n ? (n & SF) : ZPF)				   \
+ 606: 		| (a.values_uint8.index1 & YXF)			   \
+ 607: 		| HF						   \
+ 608: 		| F_C;
+ 609: #define IN_VC			\
+ 610: 	zuint8 t;		\
+ 611: 				\
+ 612: 	PC += 2;		\
+ 613: 	t = IN(BC);		\
+ 614: 				\
+ 615: 	F = (zuint8)		\
+ 616: 		((t & SYXF)	\
+ 617: 		 | ZF_ZERO(t)	\
+ 618: 		 | PF_PARITY(t) \
+ 619: 		 | F_C);
+ 620: #define INX(hl_operator, c_operator)									  \
+ 621: 	zuint8 v;											  \
+ 622: 	zuint t;											  \
+ 623: 													  \
+ 624: 	PC += 2;											  \
+ 625: 	t = (zuint)(v = IN(BC)) + ((C c_operator 1) & 255);						  \
+ 626: 	WRITE_8(HL, v);											  \
+ 627: 	HL hl_operator;											  \
+ 628: 	B--;												  \
+ 629: 													  \
+ 630: 	F = (zuint8)											  \
+ 631: 		((B & SYXF)		  /* SF = (B - 1).7; YF = (B - 1).5; XF = (B - 1).3	       */ \
+ 632: 		 | ZF_ZERO(B)		  /* ZF = !(B - 1)					       */ \
+ 633: 		 | PF_PARITY((t & 7) ^ B) /* PF = Parity of (([HL] + ((C +/- 1) & 255)) and 7) xor B   */ \
+ 634: 		 | (v & 128));		  /* NF = IN(BC).7					       */ \
+ 635: 					  /* if (([HL] + ((C +/- 1) & 255)) > 255) HF = 1; else HF = 0 */ \
+ 636: 	if (t > 255) F |= HCF;		  /* if (([HL] + ((C +/- 1) & 255)) > 255) HF = 1; else HF = 0 */
+ 637: #define INXR(hl_operator, c_operator) \
+ 638: 	INX(hl_operator, c_operator); \
+ 639: 	if (!B)	 return 16;	      \
+ 640: 	PC -= 2; return 21;
+ 641: #define OUTX(operator)										     \
+ 642: 	zuint8 t;										     \
+ 643: 												     \
+ 644: 	PC += 2;										     \
+ 645: 	OUT(BC, t = READ_8(HL));								     \
+ 646: 	HL operator;										     \
+ 647: 	B--;											     \
+ 648: 												     \
+ 649: 	F = (zuint8)										     \
+ 650: 		((B & SYXF)			/* SF = (B - 1).7; YF = (B - 1).5; XF = (B - 1).3 */ \
+ 651: 		 | ZF_ZERO(B)			/* ZF = !(B - 1)				  */ \
+ 652: 		 | PF_PARITY(((L + t) & 7) ^ B) /* PF = Parity of ((L + [HL]) and 7) xor B	  */ \
+ 653: 		 | (t & 128));			/* NF = IN(BC).7				  */ \
+ 654: 						/* if (L + [HL] > 255) HF = 1; else HF = 0	  */ \
+ 655: 	if ((zuint)t + L > 255) F |= HCF;	/* if (L + [HL] > 255) CF = 1; else CF = 0	  */
+ 656: #define OTXR(operator)	    \
+ 657: 	OUTX(operator);	    \
+ 658: 	if (!B)	 return 16; \
+ 659: 	PC -= 2; return 21;
+ 660: #define RET PC = READ_16(SP); SP += 2;
+ 661: /* MARK: - Instructions: 8-Bit Load Group
+ 662: .---------------------------------------------------------------------------.
+ 663: |			0	1	2	3	  Flags		    |
+ 664: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 665: |  -----------------------------------------------------------------------  |
+ 666: |  ld X,Y		01xxxyyy			  ........  1 / 4   |
+ 667: |  ld J,K		<  DD  >01jjjkkk		  ........  2 / 8   |
+ 668: |  ld P,Q		<  FD  >01pppqqq		  ........  2 / 8   |
+ 669: |  ld X,BYTE		00xxx110< BYTE >		  ........  2 / 7   |
+ 670: |  ld J,BYTE		<  DD  >00jjj110< BYTE >	  ........  3 / 11  |
+ 671: |  ld P,BYTE		<  FD  >00ppp110< BYTE >	  ........  3 / 11  |
+ 672: |  ld X,(hl)		01xxx110			  ........  2 / 7   |
+ 673: |  ld X,(ix+OFFSET)	<  DD  >01xxx110<OFFSET>	  ........  5 / 19  |
+ 674: |  ld X,(iy+OFFSET)	<  FD  >01xxx110<OFFSET>	  ........  5 / 19  |
+ 675: |  ld (hl),Y		01110yyy			  ........  2 / 7   |
+ 676: |  ld (ix+OFFSET),Y	<  DD  >01110yyy<OFFSET>	  ........  5 / 19  |
+ 677: |  ld (iy+OFFSET),Y	<  FD  >01110yyy<OFFSET>	  ........  5 / 19  |
+ 678: |  ld (hl),BYTE		<  36  >< BYTE >		  ........  3 / 10  |
+ 679: |  ld (ix+OFFSET),BYTE	<  DD  ><  36  ><OFFSET>< BYTE >  ........  5 / 19  |
+ 680: |  ld (iy+OFFSET),BYTE	<  FD  ><  36  ><OFFSET>< BYTE >  ........  5 / 19  |
+ 681: |  ld a,(bc)		<  0A  >			  ........  2 / 7   |
+ 682: |  ld a,(de)		<  1A  >			  ........  2 / 7   |
+ 683: |  ld a,(WORD)		<  3A  ><     WORD     >	  ........  4 / 13  |
+ 684: |  ld (bc),a		<  02  >			  ........  2 / 7   |
+ 685: |  ld (de),a		<  12  >			  ........  2 / 7   |
+ 686: |  ld (WORD),a		<  32  ><     WORD     >	  ........  4 / 13  |
+ 687: |  ld a,i		<  ED  ><  57  >		  szy0xi0.  2 / 9   |
+ 688: |  ld a,r		<  ED  ><  5F  >		  szy0xi0.  2 / 9   |
+ 689: |  ld i,a		<  ED  ><  47  >		  ........  2 / 9   |
+ 690: |  ld r,a		<  ED  ><  4F  >		  ........  2 / 9   |
+ 691: '--------------------------------------------------------------------------*/
+ 692: INSTRUCTION(ld_X_Y)	       {PC++; X0 = Y0;						    return  4;}
+ 693: INSTRUCTION(ld_JP_KQ)	       {PC += 2; JP = KQ;					    return  8;}
+ 694: INSTRUCTION(ld_X_BYTE)	       {X0 = READ_8((PC += 2) - 1);				    return  7;}
+ 695: INSTRUCTION(ld_JP_BYTE)	       {JP = READ_8((PC += 3) - 1);				    return 11;}
+ 696: INSTRUCTION(ld_X_vhl)	       {PC++; X0 = READ_8(HL);					    return  7;}
+ 697: INSTRUCTION(ld_X_vXYOFFSET)    {X1 = READ_8(XY + READ_OFFSET((PC += 3) - 1));		    return 19;}
+ 698: INSTRUCTION(ld_vhl_Y)	       {PC++; WRITE_8(HL, Y0);					    return  7;}
+ 699: INSTRUCTION(ld_vXYOFFSET_Y)    {WRITE_8(XY + READ_OFFSET((PC += 3) - 1), Y1);		    return 19;}
+ 700: INSTRUCTION(ld_vhl_BYTE)       {WRITE_8(HL, READ_8((PC += 2) - 1));			    return 10;}
+ 701: INSTRUCTION(ld_vXYOFFSET_BYTE) {PC += 4; WRITE_8(XY + READ_OFFSET(PC - 2), READ_8(PC - 1)); return 19;}
+ 702: INSTRUCTION(ld_a_vbc)	       {PC++; A = READ_8(BC);					    return  7;}
+ 703: INSTRUCTION(ld_a_vde)	       {PC++; A = READ_8(DE);					    return  7;}
+ 704: INSTRUCTION(ld_a_vWORD)	       {A = READ_8(READ_16((PC += 3) - 2));			    return 13;}
+ 705: INSTRUCTION(ld_vbc_a)	       {PC++; WRITE_8(BC, A);					    return  7;}
+ 706: INSTRUCTION(ld_vde_a)	       {PC++; WRITE_8(DE, A);					    return  7;}
+ 707: INSTRUCTION(ld_vWORD_a)	       {WRITE_8(READ_16((PC += 3) - 2), A);			    return 13;}
+ 708: INSTRUCTION(ld_a_i)	       {PC += 2; A = I; LD_A_I_LD_A_R;				    return  9;}
+ 709: INSTRUCTION(ld_a_r)	       {PC += 2; A = R_ALL; LD_A_I_LD_A_R;			    return  9;}
+ 710: INSTRUCTION(ld_i_a)	       {PC += 2; I = A;						    return  9;}
+ 711: INSTRUCTION(ld_r_a)	       {PC += 2; R = R7 = A;					    return  9;}
+ 712: /* MARK: - Instructions: 16-Bit Load Group
+ 713: .---------------------------------------------------------------------------.
+ 714: |			0	1	2	3	  Flags		    |
+ 715: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 716: |  -----------------------------------------------------------------------  |
+ 717: |  ld SS,WORD		00ss0001<     WORD     >	  ........  3 / 10  |
+ 718: |  ld ix,WORD		<  DD  ><  21  ><     WORD     >  ........  4 / 14  |
+ 719: |  ld iy,WORD		<  FD  ><  21  ><     WORD     >  ........  4 / 14  |
+ 720: |  ld hl,(WORD)		<  2A  ><     WORD     >	  ........  5 / 16  |
+ 721: |  ld SS,(WORD)		<  ED  >01ss1011<     WORD     >  ........  6 / 20  |
+ 722: |  ld ix,(WORD)		<  DD  ><  2A  ><     WORD     >  ........  6 / 20  |
+ 723: |  ld iy,(WORD)		<  FD  ><  2A  ><     WORD     >  ........  6 / 20  |
+ 724: |  ld (WORD),hl		<  22  ><     WORD     >	  ........  5 / 16  |
+ 725: |  ld (WORD),SS		<  ED  >01ss0011<     WORD     >  ........  6 / 20  |
+ 726: |  ld (WORD),ix		<  DD  ><  22  ><     WORD     >  ........  6 / 20  |
+ 727: |  ld (WORD),iy		<  FD  ><  22  ><     WORD     >  ........  6 / 20  |
+ 728: |  ld sp,hl		<  F9  >			  ........  1 / 6   |
+ 729: |  ld sp,ix		<  DD  ><  F9  >		  ........  2 / 10  |
+ 730: |  ld sp,iy		<  FD  ><  F9  >		  ........  2 / 10  |
+ 731: |  push TT		11tt0101			  ........  3 / 11  |
+ 732: |  push ix		<  DD  ><  E5  >		  ........  4 / 15  |
+ 733: |  push iy		<  FD  ><  E5  >		  ........  4 / 15  |
+ 734: |  pop TT		11tt0001			  ........  3 / 10  |
+ 735: |  pop ix		<  DD  ><  E1  >		  ........  4 / 14  |
+ 736: |  pop iy		<  FD  ><  E1  >		  ........  4 / 14  |
+ 737: '--------------------------------------------------------------------------*/
+ 738: INSTRUCTION(ld_SS_WORD)	 {SS0 = READ_16((PC += 3) - 2);		 return 10;}
+ 739: INSTRUCTION(ld_XY_WORD)	 {XY  = READ_16((PC += 4) - 2);		 return 14;}
+ 740: INSTRUCTION(ld_hl_vWORD) {HL  = READ_16(READ_16((PC += 3) - 2)); return 16;}
+ 741: INSTRUCTION(ld_SS_vWORD) {SS1 = READ_16(READ_16((PC += 4) - 2)); return 20;}
+ 742: INSTRUCTION(ld_XY_vWORD) {XY  = READ_16(READ_16((PC += 4) - 2)); return 20;}
+ 743: INSTRUCTION(ld_vWORD_hl) {WRITE_16(READ_16((PC += 3) - 2), HL);	 return 16;}
+ 744: INSTRUCTION(ld_vWORD_SS) {WRITE_16(READ_16((PC += 4) - 2), SS1); return 20;}
+ 745: INSTRUCTION(ld_vWORD_XY) {WRITE_16(READ_16((PC += 4) - 2), XY);	 return 20;}
+ 746: INSTRUCTION(ld_sp_hl)	 {PC++; SP = HL;			 return  6;}
+ 747: INSTRUCTION(ld_sp_XY)	 {PC += 2; SP = XY;			 return 10;}
+ 748: INSTRUCTION(push_TT)	 {PC++; WRITE_16(SP -= 2, TT);		 return 11;}
+ 749: INSTRUCTION(push_XY)	 {PC += 2; WRITE_16(SP -= 2, XY);	 return 15;}
+ 750: INSTRUCTION(pop_TT)	 {PC++; TT = READ_16(SP); SP += 2;	 return 10;}
+ 751: INSTRUCTION(pop_XY)	 {PC += 2; XY = READ_16(SP); SP += 2;	 return 14;}
+ 752: /* MARK: - Instructions: Exchange, Block Transfer and Search Groups
+ 753: .--------------------------------------------------------------------------------.
+ 754: |			0	1	2	3	  Flags			 |
+ 755: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles	 |
+ 756: |  ----------------------------------------------------------------------------	 |
+ 757: |  ex de,hl		<  EB  >			  ........  1 / 4	 |
+ 758: |  ex af,af'		<  08  >			  ........  1 / 4	 |
+ 759: |  exx			<  D9  >			  ........  1 / 4	 |
+ 760: |  ex (sp),hl		<  E3  >			  ........  5 / 19	 |
+ 761: |  ex (sp),ix		<  DD  ><  E3  >		  ........  6 / 23	 |
+ 762: |  ex (sp),iy		<  FD  ><  E3  >		  ........  6 / 23	 |
+ 763: |  ldi			<  ED  ><  A0  >		  ..*0**0.  4 / 16	 |
+ 764: |  ldir			<  ED  ><  B0  >		  ..*0*00.  5,4 / 21,16	 |
+ 765: |  ldd			<  ED  ><  A8  >		  ..*0**0.  4 / 16	 |
+ 766: |  lddr			<  ED  ><  B8  >		  ..*0*00.  5,4 / 21,16	 |
+ 767: |  cpi			<  ED  ><  A1  >		  ******1.  4 / 16	 |
+ 768: |  cpir			<  ED  ><  B1  >		  ******1.  5,4 / 21,16	 |
+ 769: |  cpd			<  ED  ><  A9  >		  ******1.  4 / 16	 |
+ 770: |  cpdr			<  ED  ><  B9  >		  ******1.  5,4 / 21,16  |
+ 771: '-------------------------------------------------------------------------------*/
+ 772: INSTRUCTION(ex_de_hl)  {zuint16 t; PC++; EX(DE, HL)			     return  4;}
+ 773: INSTRUCTION(ex_af_af_) {zuint16 t; PC++; EX(AF, AF_)			     return  4;}
+ 774: INSTRUCTION(exx)       {zuint16 t; PC++; EX(BC, BC_) EX(DE, DE_) EX(HL, HL_) return  4;}
+ 775: INSTRUCTION(ex_vsp_hl) {zuint16 t; PC++; EX_VSP_X(HL)			     return 19;}
+ 776: INSTRUCTION(ex_vsp_XY) {zuint16 t; PC += 2; EX_VSP_X(XY)		     return 23;}
+ 777: INSTRUCTION(ldi)       {LDX (++)					     return 16;}
+ 778: INSTRUCTION(ldir)      {LDXR(++)						       }
+ 779: INSTRUCTION(ldd)       {LDX (--)					     return 16;}
+ 780: INSTRUCTION(lddr)      {LDXR(--)						       }
+ 781: INSTRUCTION(cpi)       {CPX (++)					     return 16;}
+ 782: INSTRUCTION(cpir)      {CPXR(++)						       }
+ 783: INSTRUCTION(cpd)       {CPX (--)					     return 16;}
+ 784: INSTRUCTION(cpdr)      {CPXR(--)						       }
+ 785: /* MARK: - Instructions: 8-Bit Arithmetic and Logical Group
+ 786: .---------------------------------------------------------------------------.
+ 787: |			0	1	2	3	  Flags		    |
+ 788: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 789: |  -----------------------------------------------------------------------  |
+ 790: |  U [a,]Y		10uuuyyy			  sz5h3***  1 / 4   |
+ 791: |  U [a,]K		<  DD  >10uuukkk		  sz5h3***  2 / 8   |
+ 792: |  U [a,]Q		<  FD  >10uuuqqq		  sz5h3***  2 / 8   |
+ 793: |  U [a,]BYTE		11uuu110< BYTE >		  sz5h3***  2 / 7   |
+ 794: |  U [a,](hl)		10uuu110			  sz5h3***  2 / 7   |
+ 795: |  U [a,](ix+OFFSET)	<  DD  >10uuu110<OFFSET>	  sz5h3***  5 / 19  |
+ 796: |  U [a,](iy+OFFSET)	<  FD  >10uuu110<OFFSET>	  sz5h3***  5 / 19  |
+ 797: |  V X			00xxxvvv			  sz5h3v0.  1 / 4   |
+ 798: |  V J			<  DD  >00jjjvvv		  sz5h3v0.  2 / 8   |
+ 799: |  V P			<  FD  >00pppvvv		  sz5h3v0.  2 / 8   |
+ 800: |  V (hl)		00110vvv			  sz5h3v*.  3 / 11  |
+ 801: |  V (ix+OFFSET)	<  DD  >00110vvv<OFFSET>	  sz5h3v*.  6 / 23  |
+ 802: |  V (iy+OFFSET)	<  FD  >00110vvv<OFFSET>	  sz5h3v*.  6 / 23  |
+ 803: '--------------------------------------------------------------------------*/
+ 804: INSTRUCTION(U_a_Y)	   {PC++; U0(Y0);					    return  4;}
+ 805: INSTRUCTION(U_a_KQ)	   {PC += 2; U1(KQ);					    return  8;}
+ 806: INSTRUCTION(U_a_BYTE)	   {U0(READ_8((PC += 2) - 1));				    return  7;}
+ 807: INSTRUCTION(U_a_vhl)	   {PC++; U0(READ_8(HL));				    return  7;}
+ 808: INSTRUCTION(U_a_vXYOFFSET) {U1(READ_8(XY + READ_OFFSET((PC += 3) - 1)));	    return 19;}
+ 809: INSTRUCTION(V_X)	   {zuint8 *r; PC++;    r = __xxx___0(object); *r = V0(*r); return  4;}
+ 810: INSTRUCTION(V_JP)	   {zuint8 *r; PC += 2; r = __jjj___ (object); *r = V1(*r); return  8;}
+ 811: INSTRUCTION(V_vhl)	   {PC++; WRITE_8(HL, V0(READ_8(HL)));			    return 11;}
+ 812: INSTRUCTION(V_vXYOFFSET)   {zuint16 a = (zuint16)(XY + READ_OFFSET((PC += 3) - 1));
+ 813: 			    WRITE_8(a, V1(READ_8(a)));				    return 23;}
+ 814: /* MARK: - Instructions: General-Purpose Arithmetic and CPU Control Group
+ 815: .---------------------------------------------------------------------------.
+ 816: |			0	1	2	3	  Flags		    |
+ 817: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 818: |  -----------------------------------------------------------------------  |
+ 819: |  nop			<  00  >			  ........  1 / 4   |
+ 820: |  halt			<  76  >			  ........  1 / 4   |
+ 821: |  di			<  F3  >			  ........  1 / 4   |
+ 822: |  ei			<  FB  >			  ........  1 / 4   |
+ 823: |  im 0			<  ED  ><  46  >		  ........  2 / 8   |
+ 824: |			<  ED  ><  4E  >				    |
+ 825: |			<  ED  ><  66  >				    |
+ 826: |			<  ED  ><  6E  >				    |
+ 827: |  im 1			<  ED  ><  56  >		  ........  2 / 8   |
+ 828: |			<  ED  ><  76  >				    |
+ 829: |  im 2			<  ED  ><  5E  >		  ........  2 / 8   |
+ 830: |			<  ED  ><  7E  >				    |
+ 831: |  daa			<  27  >			  szyhxp.c  1 / 4   |
+ 832: |  cpl			<  2F  >			  ..y1x.1.  1 / 4   |
+ 833: |  neg			<  ED  ><  44  >		  szyhxv1c  2 / 8   |
+ 834: |			<  ED  ><  4C  >				    |
+ 835: |			<  ED  ><  54  >				    |
+ 836: |			<  ED  ><  5C  >				    |
+ 837: |			<  ED  ><  64  >				    |
+ 838: |			<  ED  ><  6C  >				    |
+ 839: |			<  ED  ><  74  >				    |
+ 840: |			<  ED  ><  7C  >				    |
+ 841: |  ccf			<  3F  >			  ..***.0c  1 / 4   |
+ 842: |  scf			<  37  >			  ..*0*.01  1 / 4   |
+ 843: '--------------------------------------------------------------------------*/
+ 844: INSTRUCTION(nop)  {PC++;			     return 4;}
+ 845: INSTRUCTION(halt) {HALT = 1; SET_HALT;		     return 4;}
+ 846: INSTRUCTION(di)	  {PC++; IFF1 = IFF2 = 0; EI = TRUE; return 4;}
+ 847: INSTRUCTION(ei)	  {PC++; IFF1 = IFF2 = 1; EI = TRUE; return 4;}
+ 848: INSTRUCTION(im_0) {PC += 2; IM = 0;		     return 8;}
+ 849: INSTRUCTION(im_1) {PC += 2; IM = 1;		     return 8;}
+ 850: INSTRUCTION(im_2) {PC += 2; IM = 2;		     return 8;}
+ 851: INSTRUCTION(daa)
+ 852: 	{
+ 853: 	zuint8 t = (F_H || (A & 0xF ) > 9) ? 6 : 0;
+ 854: 	if (F_C || A > 0x99) t |= 0x60;
+ 855: 	t = (F_N) ? A - t : A + t;
+ 856: 	PC++;
+ 857: 	F = (zuint8)
+ 858: 		((F_N)			 /* NF unchanged		 */
+ 859: 		 | (t & SYXF)		 /* SF = A.7; YF = A.5; XF = A.3 */
+ 860: 		 | ZF_ZERO(t)		 /* ZF = !Af			 */
+ 861: 		 | ((A & HF) ^ (t & HF)) /* HF = Ai.4 xor Af.4		 */
+ 862: 		 | PF_PARITY(t)		 /* PF = Parity of Af		 */
+ 863: 		 | (F_C | (A > 0x99)));	 /* CF = CF | (Ai > 0x99)	 */
+ 864: 	A = t;
+ 865: 	return 4;
+ 866: 	}
+ 867: INSTRUCTION(cpl)
+ 868: 	{
+ 869: 	PC++; A = ~A;
+ 870: 	F =	(F & (SF | ZF | PF | CF)) /* SF, ZF, PF, CF unchanged */
+ 871: 		| HF			  /* HF = 1		      */
+ 872: 		| NF			  /* NF = 1		      */
+ 873: 		| A_YX;			  /* YF = A.5; XF = A.3	      */
+ 874: 	return 4;
+ 875: 	}
+ 876: INSTRUCTION(neg)
+ 877: 	{
+ 878: 	zuint8 t = -A; PC += 2;
+ 879: 	F = (zuint8)
+ 880: 		((t & SYXF)	      /* SF = -A.7; YF = -A.5; XF = -A.3 */
+ 881: 		 | ZF_ZERO(t)	      /* ZF = !-A			 */
+ 882: 		 | ((0 ^ A ^ t) & HF) /* HF = Half-borrow		 */
+ 883: 		 | ((t == 128) << 2)  /* PF = Overflow			 */
+ 884: 		 | NF		      /* NF = 1				 */
+ 885: 		 | !!A);	      /* CF = !!A			 */
+ 886: 	A = t;
+ 887: 	return 8;
+ 888: 	}
+ 889: INSTRUCTION(ccf)
+ 890: 	{
+ 891: 	PC++;
+ 892: 	F = (zuint8)
+ 893: 		(F_SZP	       /* SF, ZF, PF unchanged */
+ 894: 		 | A_YX	       /* YF = A.5; XF = A.3   */
+ 895: 		 | (F_C << 4)  /* HF = CF	       */
+ 896: 		 | (~F & CF)); /* CF = ~CF	       */
+ 897: 			       /* NF = 0	       */
+ 898: 	return 4;
+ 899: 	}
+ 900: INSTRUCTION(scf)
+ 901: 	{
+ 902: 	PC++;
+ 903: 	F =	F_SZP  /* SF, ZF, PF unchanged */
+ 904: 		| A_YX /* YF = A.5; XF = A.3   */
+ 905: 		| CF;  /* CF = 1	       */
+ 906: 		       /* HF = 0; NF = 0       */
+ 907: 	return 4;
+ 908: 	}
+ 909: /* MARK: - Instructions: 16-Bit Arithmetic Group
+ 910: .---------------------------------------------------------------------------.
+ 911: |			0	1	2	3	  Flags		    |
+ 912: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 913: |  -----------------------------------------------------------------------  |
+ 914: |  add hl,SS		00ss1001			  ..***.0*  3 / 11  |
+ 915: |  adc hl,SS		<  ED  >01ss1010		  *****v0*  4 / 15  |
+ 916: |  sbc hl,SS		<  ED  >01ss0010		  *****v0*  4 / 15  |
+ 917: |  add ix,WW		<  DD  >00ww1001		  ..***.0*  4 / 15  |
+ 918: |  add iy,WW		<  FD  >00ww1001		  ..***.0*  4 / 15  |
+ 919: |  inc SS		00ss0011			  ........  1 / 6   |
+ 920: |  inc ix		<  DD  ><  23  >		  ........  2 / 10  |
+ 921: |  inc iy		<  FD  ><  23  >		  ........  2 / 10  |
+ 922: |  dec SS		00ss1011			  ........  1 / 6   |
+ 923: |  dec ix		<  DD  ><  2B  >		  ........  2 / 10  |
+ 924: |  dec iy		<  FD  ><  2B  >		  ........  2 / 10  |
+ 925: '--------------------------------------------------------------------------*/
+ 926: INSTRUCTION(add_hl_SS) {PC++;	 ADD_RR_NN(HL, SS0)			 return 11;}
+ 927: INSTRUCTION(adc_hl_SS) {ADC_SBC_HL_SS(adc, +, (zuint32)v + c + HL > 65535, Z_EMPTY)}
+ 928: INSTRUCTION(sbc_hl_SS) {ADC_SBC_HL_SS(sbc, -, (zuint32)v + c > HL, | NF)	   }
+ 929: INSTRUCTION(add_XY_WW) {PC += 2; ADD_RR_NN(XY, WW)			 return 15;}
+ 930: INSTRUCTION(inc_SS)    {PC++;	 SS0++;					 return  6;}
+ 931: INSTRUCTION(inc_XY)    {PC += 2; XY++;					 return 10;}
+ 932: INSTRUCTION(dec_SS)    {PC++;	 SS0--;					 return  6;}
+ 933: INSTRUCTION(dec_XY)    {PC += 2; XY--;					 return 15;}
+ 934: /* MARK: - Instructions: Rotate and Shift Group
+ 935: .---------------------------------------------------------------------------.
+ 936: |			0	1	2	3	  Flags		    |
+ 937: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 938: |  -----------------------------------------------------------------------  |
+ 939: |  rlca			<  07  >			  ..y0x.0c  1 / 4   |
+ 940: |  rla			<  17  >			  ..y0x.0c  1 / 4   |
+ 941: |  rrca			<  0F  >			  ..y0x.0c  1 / 4   |
+ 942: |  rra			<  1F  >			  ..y0x.0c  1 / 4   |
+ 943: |  G Y			<  CB  >00gggyyy		  szy0xp0c  2 / 8   |
+ 944: |  G (hl)		<  CB  >00ggg110		  szy0xp0c  4 / 15  |
+ 945: |  G (ix+OFFSET)	<  DD  ><  CB  ><OFFSET>00ggg110  szy0xp0c  6 / 23  |
+ 946: |  G (iy+OFFSET)	<  FD  ><  CB  ><OFFSET>00ggg110  szy0xp0c  6 / 23  |
+ 947: |  G (ix+OFFSET),Y	<  DD  ><  CB  ><OFFSET>00gggyyy  szy0xp0c  6 / 23  |
+ 948: |  G (iy+OFFSET),Y	<  FD  ><  CB  ><OFFSET>00gggyyy  szy0xp0c  6 / 23  |
+ 949: |  rld			<  ED  ><  6F  >		  szy0xp0.  5 / 18  |
+ 950: |  rrd			<  ED  ><  67  >		  szy0xp0.  5 / 18  |
+ 951: '--------------------------------------------------------------------------*/
+ 952: INSTRUCTION(rlca)	   {PC++; ROL(A); F = F_SZP | (A & YXCF);			      return  4;}
+ 953: INSTRUCTION(rla)	   {zuint8 c; PC++; c = A >> 7; A = (zuint8)((A << 1) | F_C); RXA     return  4;}
+ 954: INSTRUCTION(rrca)	   {PC++; ROR(A); F = F_SZP | A_YX | (A >> 7);			      return  4;}
+ 955: INSTRUCTION(rra)	   {zuint8 c; PC++; c = A & 1; A = (zuint8)((A >> 1) | (F << 7)); RXA return  4;}
+ 956: INSTRUCTION(G_Y)	   {zuint8 *r = _____yyy1(object); *r = G1(*r);			      return  8;}
+ 957: INSTRUCTION(G_vhl)	   {WRITE_8(HL, G1(READ_8(HL)));				      return 15;}
+ 958: INSTRUCTION(G_vXYOFFSET)   {zuint16 a = XY_ADDRESS; WRITE_8(a,	    G3(READ_8(a)));	      return 23;}
+ 959: INSTRUCTION(G_vXYOFFSET_Y) {zuint16 a = XY_ADDRESS; WRITE_8(a, Y3 = G3(READ_8(a)));	      return 23;}
+ 960: INSTRUCTION(rld)	   {RXD(<<, & 0xF, >> 4)					      return 18;}
+ 961: INSTRUCTION(rrd)	   {RXD(>>, << 4, & 0xF)					      return 18;}
+ 962: /* MARK: - Instructions: Bit Set, Reset and Test Group
+ 963: .---------------------------------------------------------------------------.
+ 964: |			0	1	2	3	  Flags		    |
+ 965: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles  |
+ 966: |  -----------------------------------------------------------------------  |
+ 967: |  bit N,Y		<  CB  >01nnnyyy		  szy1xz0.  2 / 8   |
+ 968: |  bit N,(hl)		<  CB  >01nnn110		  sz?1?z0.  3 / 12  |
+ 969: |  bit N,(ix+OFFSET)	<  DD  ><  CB  ><OFFSET>01nnn***  sz*1*z0.  5 / 20  |
+ 970: |  bit N,(iy+OFFSET)	<  FD  ><  CB  ><OFFSET>01nnn***  sz*1*z0.  5 / 20  |
+ 971: |  M N,Y		<  CB  >1mnnnyyy		  ........  2 / 8   |
+ 972: |  M N,(hl)		<  CB  >1mnnn110		  ........  4 / 15  |
+ 973: |  M N,(ix+OFFSET)	<  DD  ><  CB  ><OFFSET>1mnnn110  ........  6 / 23  |
+ 974: |  M N,(iy+OFFSET)	<  FD  ><  CB  ><OFFSET>1mnnn110  ........  6 / 23  |
+ 975: |  M N,(ix+OFFSET),Y	<  DD  ><  CB  ><OFFSET>1mnnnyyy  ........  6 / 23  |
+ 976: |  M N,(iy+OFFSET),Y	<  FD  ><  CB  ><OFFSET>1mnnnyyy  ........  6 / 23  |
+ 977: '--------------------------------------------------------------------------*/
+ 978: INSTRUCTION(bit_N_Y)	     {BIT_N_VALUE(Y1)					      return  8;}
+ 979: INSTRUCTION(bit_N_vhl)	     {BIT_N_VALUE(READ_8(HL))				      return 12;}
+ 980: INSTRUCTION(bit_N_vXYOFFSET) {BIT_N_VADDRESS(XY_ADDRESS)			      return 20;}
+ 981: INSTRUCTION(M_N_Y)	     {zuint8 *t = _____yyy1(object); *t = M1(*t);	      return  8;}
+ 982: INSTRUCTION(M_N_vhl)	     {WRITE_8(HL, M1(READ_8(HL)));			      return 15;}
+ 983: INSTRUCTION(M_N_vXYOFFSET)   {zuint16 a = XY_ADDRESS; WRITE_8(a,      M3(READ_8(a))); return 23;}
+ 984: INSTRUCTION(M_N_vXYOFFSET_Y) {zuint16 a = XY_ADDRESS; WRITE_8(a, Y3 = M3(READ_8(a))); return 23;}
+ 985: /* MARK: - Instructions: Jump Group
+ 986: .-------------------------------------------------------------------------------.
+ 987: |			0	1	2	3	  Flags			|
+ 988: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles	|
+ 989: |  ---------------------------------------------------------------------------	|
+ 990: |  jp WORD		<  C3  ><     WORD     >	  ........  3 / 10	|
+ 991: |  jp Z,WORD		11zzz010<     WORD     >	  ........  3 / 10	|
+ 992: |  jr OFFSET		<  18  ><OFFSET>		  ........  3 / 12	|
+ 993: |  jr Z,OFFSET		001zz000<OFFSET>		  ........  3,2 / 12,7	|
+ 994: |  jp (hl)		<  E9  >			  ........  1 / 4	|
+ 995: |  jp (ix)		<  DD  ><  E9  >		  ........  2 / 8	|
+ 996: |  jp (iy)		<  FD  ><  E9  >		  ........  2 / 8	|
+ 997: |  djnz OFFSET		<  10  ><OFFSET>		  ........  3,2 / 13,8	|
+ 998: '------------------------------------------------------------------------------*/
+ 999: INSTRUCTION(jp_WORD)	 {PC = READ_16(PC + 1);							return 10;}
+1000: INSTRUCTION(jp_Z_WORD)	 {PC = Z ? READ_16(PC + 1) : PC + 3;					return 10;}
+1001: INSTRUCTION(jr_OFFSET)	 {PC += (2 + READ_OFFSET(PC + 1));					return 12;}
+1002: INSTRUCTION(jr_Z_OFFSET) {BYTE0 &= 223; PC += 2; if (Z) {PC += READ_OFFSET(PC - 1); return 12;} return	7;}
+1003: INSTRUCTION(jp_hl)	 {PC = HL;								return	4;}
+1004: INSTRUCTION(jp_XY)	 {PC = XY;								return	8;}
+1005: INSTRUCTION(djnz_OFFSET) {PC += 2; if (--B) {PC += READ_OFFSET(PC - 1); return 13;}		return	8;}
+1006: /* MARK: - Instructions: Call and Return Group
+1007: .--------------------------------------------------------------------------------.
+1008: |			0	1	2	3	  Flags			 |
+1009: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles	 |
+1010: |  ----------------------------------------------------------------------------	 |
+1011: |  call WORD		<  CD  ><     WORD     >	  ........  5 / 17	 |
+1012: |  call Z,WORD		11zzz100<     WORD     >	  ........  3,5 / 10,17	 |
+1013: |  ret			<  C9  >			  ........  3 / 10	 |
+1014: |  ret Z		11zzz000			  ........  1,3 / 5,11	 |
+1015: |  reti			<  ED  ><  4D  >		  ........  4 / 14	 |
+1016: |  retn			<  ED  ><  45  >		  ........  4 / 14	 |
+1017: |			<  ED  ><  55  >					 |
+1018: |			<  ED  ><  5D  >					 |
+1019: |			<  ED  ><  65  >					 |
+1020: |			<  ED  ><  6D  >					 |
+1021: |			<  ED  ><  75  >					 |
+1022: |			<  ED  ><  7D  >					 |
+1023: |  rst N		11nnn111			  ........  3 / 11	 |
+1024: '-------------------------------------------------------------------------------*/
+1025: INSTRUCTION(call_WORD)	 {PUSH(PC + 3); PC = READ_16(PC + 1);	    return 17;}
+1026: INSTRUCTION(call_Z_WORD) {if (Z) return call_WORD(object); PC += 3; return 10;}
+1027: INSTRUCTION(ret)	 {RET;					    return 10;}
+1028: INSTRUCTION(ret_Z)	 {if (Z) {RET; return 11;} PC++;	    return  5;}
+1029: INSTRUCTION(reti)	 {IFF1 = IFF2; RET;			    return 14;}
+1030: INSTRUCTION(retn)	 {IFF1 = IFF2; RET;			    return 14;}
+1031: INSTRUCTION(rst_N)	 {PUSH(PC + 1); PC = BYTE0 & 56;	    return 11;}
+1032: /* MARK: - Instructions: Input and Output Group
+1033: .--------------------------------------------------------------------------------.
+1034: |			0	1	2	3	  Flags			 |
+1035: |  Assembly		76543210765432107654321076543210  szyhxpnc  Cycles	 |
+1036: |  ----------------------------------------------------------------------------	 |
+1037: |  in a,(BYTE)		<  DB  >< BYTE >		  ........  3 / 11	 |
+1038: |  in X,(c)		<  ED  >01xxx000		  szy0xp0.  3 / 12	 |
+1039: |  in 0,(c)		<  ED  ><  70  >		  szy0xp0.  3 / 12	 |
+1040: |  ini			<  ED  ><  A2  >		  ********  4 / 16	 |
+1041: |  inir			<  ED  ><  B2  >		  010*0***  5,4 / 21,16	 |
+1042: |  ind			<  ED  ><  AA  >		  ********  4 / 16	 |
+1043: |  indr			<  ED  ><  BA  >		  010*0***  5,4 / 21,16	 |
+1044: |  out (BYTE),a		<  D3  >< BYTE >		  ........  3 / 11	 |
+1045: |  out (c),X		<  ED  >01xxx001		  ........  3 / 12	 |
+1046: |  out (c),0		<  ED  ><  71  >		  ........  3 / 12	 |
+1047: |  outi			<  ED  ><  A3  >		  ********  4 / 16	 |
+1048: |  otir			<  ED  ><  B3  >		  010*0_**  5,4 / 21,16	 |
+1049: |  outd			<  ED  ><  AB  >		  ********  4 / 16	 |
+1050: |  otdr			<  ED  ><  BB  >		  010*0***  5,4 / 21,16	 |
+1051: '-------------------------------------------------------------------------------*/
+1052: INSTRUCTION(in_a_BYTE)	 {A = IN((A << 8) | READ_8((PC += 2) - 1)); return 11;}
+1053: INSTRUCTION(in_X_vc)	 {IN_VC; X1 = t;			    return 12;}
+1054: INSTRUCTION(in_0_vc)	 {IN_VC;				    return 16;}
+1055: INSTRUCTION(ini)	 {INX (++, +)				    return 16;}
+1056: INSTRUCTION(inir)	 {INXR(++, +)					      }
+1057: INSTRUCTION(ind)	 {INX (--, -)				    return 16;}
+1058: INSTRUCTION(indr)	 {INXR(--, -)					      }
+1059: INSTRUCTION(out_vBYTE_a) {OUT((A << 8) | READ_8((PC += 2) - 1), A); return 11;}
+1060: INSTRUCTION(out_vc_X)	 {PC += 2; OUT(BC, X1);			    return 12;}
+1061: INSTRUCTION(out_vc_0)	 {PC += 2; OUT(BC, 0);			    return 12;}
+1062: INSTRUCTION(outi)	 {OUTX(++)				    return 16;}
+1063: INSTRUCTION(otir)	 {OTXR(++)					      }
+1064: INSTRUCTION(outd)	 {OUTX(--)				    return 16;}
+1065: INSTRUCTION(otdr)	 {OTXR(--)					      }
+1066: /* MARK: - Opcode Selector Prototypes */
+1067: INSTRUCTION(CB);
+1068: INSTRUCTION(DD);
+1069: INSTRUCTION(ED);
+1070: INSTRUCTION(FD);
+1071: INSTRUCTION(XY_CB);
+1072: INSTRUCTION(ED_illegal);
+1073: INSTRUCTION(XY_illegal);
+1074: INSTRUCTION(hook); /* SNO */
+1075: /* MARK: - Instruction Function Tables */
+1076: static Instruction const instruction_table[256] = {
+1077: /*	0	     1		 2	      3		   4		5	  6	       7	 8	      9		 A	      B		 C	      D		 E	    F */
+1078: /* 0 */ nop,	     ld_SS_WORD, ld_vbc_a,    inc_SS,	   V_X,		V_X,	  ld_X_BYTE,   rlca,	 ex_af_af_,   add_hl_SS, ld_a_vbc,    dec_SS,	 V_X,	      V_X,	 ld_X_BYTE, rrca,
+1079: /* 1 */ djnz_OFFSET, ld_SS_WORD, ld_vde_a,    inc_SS,	   V_X,		V_X,	  ld_X_BYTE,   rla,	 jr_OFFSET,   add_hl_SS, ld_a_vde,    dec_SS,	 V_X,	      V_X,	 ld_X_BYTE, rra,
+1080: /* 2 */ jr_Z_OFFSET, ld_SS_WORD, ld_vWORD_hl, inc_SS,	   V_X,		V_X,	  ld_X_BYTE,   daa,	 jr_Z_OFFSET, add_hl_SS, ld_hl_vWORD, dec_SS,	 V_X,	      V_X,	 ld_X_BYTE, cpl,
+1081: /* 3 */ jr_Z_OFFSET, ld_SS_WORD, ld_vWORD_a,  inc_SS,	   V_vhl,	V_vhl,	  ld_vhl_BYTE, scf,	 jr_Z_OFFSET, add_hl_SS, ld_a_vWORD,  dec_SS,	 V_X,	      V_X,	 ld_X_BYTE, ccf,
+1082: /* 4 */ ld_X_Y,	     ld_X_Y,	 ld_X_Y,      ld_X_Y,	   ld_X_Y,	ld_X_Y,	  ld_X_vhl,    ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_vhl,  ld_X_Y,
+1083: /* 5 */ ld_X_Y,	     ld_X_Y,	 ld_X_Y,      ld_X_Y,	   ld_X_Y,	ld_X_Y,	  ld_X_vhl,    ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_vhl,  ld_X_Y,
+1084: /* 6 */ ld_X_Y,	     ld_X_Y,	 ld_X_Y,      ld_X_Y,	   hook/*SNO*/,	ld_X_Y,	  ld_X_vhl,    ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_vhl,  ld_X_Y,
+1085: /* 7 */ ld_vhl_Y,    ld_vhl_Y,	 ld_vhl_Y,    ld_vhl_Y,	   ld_vhl_Y,	ld_vhl_Y, halt,	       ld_vhl_Y, ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_Y,      ld_X_Y,	 ld_X_vhl,  ld_X_Y,
+1086: /* 8 */ U_a_Y,	     U_a_Y,	 U_a_Y,	      U_a_Y,	   U_a_Y,	U_a_Y,	  U_a_vhl,     U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_vhl,   U_a_Y,
+1087: /* 9 */ U_a_Y,	     U_a_Y,	 U_a_Y,	      U_a_Y,	   U_a_Y,	U_a_Y,	  U_a_vhl,     U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_vhl,   U_a_Y,
+1088: /* A */ U_a_Y,	     U_a_Y,	 U_a_Y,	      U_a_Y,	   U_a_Y,	U_a_Y,	  U_a_vhl,     U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_vhl,   U_a_Y,
+1089: /* B */ U_a_Y,	     U_a_Y,	 U_a_Y,	      U_a_Y,	   U_a_Y,	U_a_Y,	  U_a_vhl,     U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_Y,	      U_a_Y,	 U_a_vhl,   U_a_Y,
+1090: /* C */ ret_Z,	     pop_TT,	 jp_Z_WORD,   jp_WORD,	   call_Z_WORD,	push_TT,  U_a_BYTE,    rst_N,	 ret_Z,	      ret,	 jp_Z_WORD,   CB,	 call_Z_WORD, call_WORD, U_a_BYTE,  rst_N,
+1091: /* D */ ret_Z,	     pop_TT,	 jp_Z_WORD,   out_vBYTE_a, call_Z_WORD,	push_TT,  U_a_BYTE,    rst_N,	 ret_Z,	      exx,	 jp_Z_WORD,   in_a_BYTE, call_Z_WORD, DD,	 U_a_BYTE,  rst_N,
+1092: /* E */ ret_Z,	     pop_TT,	 jp_Z_WORD,   ex_vsp_hl,   call_Z_WORD,	push_TT,  U_a_BYTE,    rst_N,	 ret_Z,	      jp_hl,	 jp_Z_WORD,   ex_de_hl,	 call_Z_WORD, ED,	 U_a_BYTE,  rst_N,
+1093: /* F */ ret_Z,	     pop_TT,	 jp_Z_WORD,   di,	   call_Z_WORD,	push_TT,  U_a_BYTE,    rst_N,	 ret_Z,	      ld_sp_hl,	 jp_Z_WORD,   ei,	 call_Z_WORD, FD,	 U_a_BYTE,  rst_N
+1094: };
+1095: static Instruction const instruction_table_CB[256] = {
+1096: /*	0	 1	  2	   3	    4	     5	      6		 7	  8	   9	    A	     B	      C	       D	E	   F */
+1097: /* 0 */ G_Y,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_vhl,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_Y,     G_Y,	G_vhl,	   G_Y,
+1098: /* 1 */ G_Y,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_vhl,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_Y,     G_Y,	G_vhl,	   G_Y,
+1099: /* 2 */ G_Y,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_vhl,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_Y,     G_Y,	G_vhl,	   G_Y,
+1100: /* 3 */ G_Y,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_vhl,	 G_Y,	  G_Y,	   G_Y,	    G_Y,     G_Y,     G_Y,     G_Y,	G_vhl,	   G_Y,
+1101: /* 4 */ bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y,
+1102: /* 5 */ bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y,
+1103: /* 6 */ bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y,
+1104: /* 7 */ bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_Y, bit_N_vhl, bit_N_Y,
+1105: /* 8 */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1106: /* 9 */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1107: /* A */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1108: /* B */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1109: /* C */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1110: /* D */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1111: /* E */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y,
+1112: /* F */ M_N_Y,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_vhl,	 M_N_Y,	  M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,   M_N_Y,	M_N_vhl,   M_N_Y
+1113: };
+1114: static Instruction const instruction_table_XY_CB[256] = {
+1115: /*	0		 1		  2		   3		    4		     5		      6		       7		8		 9		  A		   B		    C		     D		      E		       F */
+1116: /* 0 */ G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,	G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,
+1117: /* 1 */ G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,	G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,
+1118: /* 2 */ G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,	G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,
+1119: /* 3 */ G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,	G_vXYOFFSET_Y,	 G_vXYOFFSET_Y,	  G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET_Y,   G_vXYOFFSET,     G_vXYOFFSET_Y,
+1120: /* 4 */ bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET,
+1121: /* 5 */ bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET,
+1122: /* 6 */ bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET,
+1123: /* 7 */ bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET, bit_N_vXYOFFSET,
+1124: /* 8 */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1125: /* 9 */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1126: /* A */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1127: /* B */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1128: /* C */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1129: /* D */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1130: /* E */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y,
+1131: /* F */ M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET_Y, M_N_vXYOFFSET,   M_N_vXYOFFSET_Y
+1132: };
+1133: static Instruction const instruction_table_XY[256] = {
+1134: /*	0		1		2		3		4		5		6		   7		   8	       9	   A		B	    C		D	    E		    F */
+1135: /* 0 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	   XY_illegal,	   XY_illegal, add_XY_WW,  XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1136: /* 1 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	   XY_illegal,	   XY_illegal, add_XY_WW,  XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1137: /* 2 */ XY_illegal,	ld_XY_WORD,	ld_vWORD_XY,	inc_XY,		V_JP,		V_JP,		ld_JP_BYTE,	   XY_illegal,	   XY_illegal, add_XY_WW,  ld_XY_vWORD, dec_XY,	    V_JP,	V_JP,	    ld_JP_BYTE,	    XY_illegal,
+1138: /* 3 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	V_vXYOFFSET,	V_vXYOFFSET,	ld_vXYOFFSET_BYTE, XY_illegal,	   XY_illegal, add_XY_WW,  XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1139: /* 4 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	ld_JP_KQ,	ld_JP_KQ,	ld_X_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, ld_JP_KQ,	ld_JP_KQ,   ld_X_vXYOFFSET, XY_illegal,
+1140: /* 5 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	ld_JP_KQ,	ld_JP_KQ,	ld_X_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, ld_JP_KQ,	ld_JP_KQ,   ld_X_vXYOFFSET, XY_illegal,
+1141: /* 6 */ ld_JP_KQ,	ld_JP_KQ,	ld_JP_KQ,	ld_JP_KQ,	ld_JP_KQ,	ld_JP_KQ,	ld_X_vXYOFFSET,	   ld_JP_KQ,	   ld_JP_KQ,   ld_JP_KQ,   ld_JP_KQ,	ld_JP_KQ,   ld_JP_KQ,	ld_JP_KQ,   ld_X_vXYOFFSET, ld_JP_KQ,
+1142: /* 7 */ ld_vXYOFFSET_Y, ld_vXYOFFSET_Y, ld_vXYOFFSET_Y, ld_vXYOFFSET_Y, ld_vXYOFFSET_Y, ld_vXYOFFSET_Y, XY_illegal,	   ld_vXYOFFSET_Y, XY_illegal, XY_illegal, XY_illegal,	XY_illegal, ld_JP_KQ,	ld_JP_KQ,   ld_X_vXYOFFSET, XY_illegal,
+1143: /* 8 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	U_a_KQ,		U_a_KQ,		U_a_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, U_a_KQ,	U_a_KQ,	    U_a_vXYOFFSET,  XY_illegal,
+1144: /* 9 */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	U_a_KQ,		U_a_KQ,		U_a_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, U_a_KQ,	U_a_KQ,	    U_a_vXYOFFSET,  XY_illegal,
+1145: /* A */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	U_a_KQ,		U_a_KQ,		U_a_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, U_a_KQ,	U_a_KQ,	    U_a_vXYOFFSET,  XY_illegal,
+1146: /* B */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	U_a_KQ,		U_a_KQ,		U_a_vXYOFFSET,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, U_a_KQ,	U_a_KQ,	    U_a_vXYOFFSET,  XY_illegal,
+1147: /* C */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_CB,	    XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1148: /* D */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	   XY_illegal,	   XY_illegal, XY_illegal, XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1149: /* E */ XY_illegal,	pop_XY,		XY_illegal,	ex_vsp_XY,	XY_illegal,	push_XY,	XY_illegal,	   XY_illegal,	   XY_illegal, jp_XY,	   XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal,
+1150: /* F */ XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	XY_illegal,	   XY_illegal,	   XY_illegal, ld_sp_XY,   XY_illegal,	XY_illegal, XY_illegal, XY_illegal, XY_illegal,	    XY_illegal
+1151: };
+1152: static Instruction const instruction_table_ED[256] = {
+1153: /*	0	    1		2	    3		 4	     5		 6	     7		 8	     9		 A	     B		  C	      D		  E	      F */
+1154: /* 0 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1155: /* 1 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1156: /* 2 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1157: /* 3 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1158: /* 4 */ in_X_vc,    out_vc_X,	sbc_hl_SS,  ld_vWORD_SS, neg,	     retn,	 im_0,	     ld_i_a,	 in_X_vc,    out_vc_X,	 adc_hl_SS,  ld_SS_vWORD, neg,	      reti,	  im_0,	      ld_r_a,
+1159: /* 5 */ in_X_vc,    out_vc_X,	sbc_hl_SS,  ld_vWORD_SS, neg,	     retn,	 im_1,	     ld_a_i,	 in_X_vc,    out_vc_X,	 adc_hl_SS,  ld_SS_vWORD, neg,	      retn,	  im_2,	      ld_a_r,
+1160: /* 6 */ in_X_vc,    out_vc_X,	sbc_hl_SS,  ld_vWORD_SS, neg,	     retn,	 im_0,	     rrd,	 in_X_vc,    out_vc_X,	 adc_hl_SS,  ld_SS_vWORD, neg,	      retn,	  im_0,	      rld,
+1161: /* 7 */ in_0_vc,    out_vc_0,	sbc_hl_SS,  ld_vWORD_SS, neg,	     retn,	 im_1,	     ED_illegal, in_X_vc,    out_vc_X,	 adc_hl_SS,  ld_SS_vWORD, neg,	      retn,	  im_2,	      ED_illegal,
+1162: /* 8 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1163: /* 9 */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1164: /* A */ ldi,	    cpi,	ini,	    outi,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ldd,	     cpd,	 ind,	     outd,	  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1165: /* B */ ldir,	    cpir,	inir,	    otir,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, lddr,	     cpdr,	 indr,	     otdr,	  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1166: /* C */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1167: /* D */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1168: /* E */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal,
+1169: /* F */ ED_illegal, ED_illegal, ED_illegal, ED_illegal,	 ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal, ED_illegal,  ED_illegal, ED_illegal, ED_illegal, ED_illegal
+1170: };
+1171: /* MARK: - Prefixed Instruction Set Selection and Execution */
+1172: #define DD_FD(register)						       \
+1173: 	zuint8 cycles;						       \
+1174: 								       \
+1175: 	XY = register;						       \
+1176: 	R++;							       \
+1177: 	cycles = instruction_table_XY[BYTE1 = READ_8(PC + 1)](object); \
+1178: 	register = XY;						       \
+1179: 	return cycles;
+1180: INSTRUCTION(DD) {DD_FD(IX)}
+1181: INSTRUCTION(FD) {DD_FD(IY)}
+1182: INSTRUCTION(CB) {R++; return instruction_table_CB[BYTE1 = READ_8((PC += 2) - 1)](object);}
+1183: INSTRUCTION(ED) {R++; return instruction_table_ED[BYTE1 = READ_8( PC	   + 1)](object);}
+1184: INSTRUCTION(XY_CB)
+1185: 	{
+1186: 	PC += 4;
+1187: 	BYTE2 = READ_8(PC - 2);
+1188: 	return instruction_table_XY_CB[BYTE3 = READ_8(PC - 1)](object);
+1189: 	}
+1190: /* MARK: - Illegal Instruction Handling */
+1191: INSTRUCTION(XY_illegal) {PC += 1; return instruction_table[BYTE0 = BYTE1](object) + 4;}
+1192: INSTRUCTION(ED_illegal) {PC += 2; return 8;}
+1193: INSTRUCTION(hook) {HOOK(PC); return 0;}	/* SNO */
+1194: /* MARK: - Main Functions */
+1195: CPU_Z80_API void z80_power(Z80 *object, zboolean state)
+1196: 	{
+1197: 	if (state)
+1198: 		{
+1199: #		ifdef Z_Z80_RESET_IS_EQUAL_TO_POWER_ON
+1200: 			z80_reset(object);
+1201: #		else
+1202: 			PC   = Z_Z80_VALUE_AFTER_POWER_ON_PC;
+1203: 			SP   = Z_Z80_VALUE_AFTER_POWER_ON_SP;
+1204: 			IX   = Z_Z80_VALUE_AFTER_POWER_ON_IX;
+1205: 			IY   = Z_Z80_VALUE_AFTER_POWER_ON_IY;
+1206: 			AF   = Z_Z80_VALUE_AFTER_POWER_ON_AF;
+1207: 			BC   = Z_Z80_VALUE_AFTER_POWER_ON_BC;
+1208: 			DE   = Z_Z80_VALUE_AFTER_POWER_ON_DE;
+1209: 			HL   = Z_Z80_VALUE_AFTER_POWER_ON_HL;
+1210: 			AF_  = Z_Z80_VALUE_AFTER_POWER_ON_AF_;
+1211: 			BC_  = Z_Z80_VALUE_AFTER_POWER_ON_BC_;
+1212: 			DE_  = Z_Z80_VALUE_AFTER_POWER_ON_DE_;
+1213: 			HL_  = Z_Z80_VALUE_AFTER_POWER_ON_HL_;
+1214: 			R    = Z_Z80_VALUE_AFTER_POWER_ON_R;
+1215: 			I    = Z_Z80_VALUE_AFTER_POWER_ON_I;
+1216: 			IFF1 = Z_Z80_VALUE_AFTER_POWER_ON_IFF1;
+1217: 			IFF2 = Z_Z80_VALUE_AFTER_POWER_ON_IFF2;
+1218: 			IM   = Z_Z80_VALUE_AFTER_POWER_ON_IM;
+1219: 			EI = HALT = INT = NMI = 0;
+1220: #		endif
+1221: 		}
+1222: 	else	PC = SP = IX = IY = AF = BC = DE = HL = AF_ = BC_ = DE_ = HL_ = I = R =
+1223: 		IFF1 = IFF2 = IM = EI = HALT = INT = NMI = 0;
+1224: 	}
+1225: CPU_Z80_API void z80_reset(Z80 *object)
+1226: 	{
+1227: 	PC   = Z_Z80_VALUE_AFTER_RESET_PC;
+1228: 	SP   = Z_Z80_VALUE_AFTER_RESET_SP;
+1229: 	IX   = Z_Z80_VALUE_AFTER_RESET_IX;
+1230: 	IY   = Z_Z80_VALUE_AFTER_RESET_IY;
+1231: 	AF   = Z_Z80_VALUE_AFTER_RESET_AF;
+1232: 	BC   = Z_Z80_VALUE_AFTER_RESET_BC;
+1233: 	DE   = Z_Z80_VALUE_AFTER_RESET_DE;
+1234: 	HL   = Z_Z80_VALUE_AFTER_RESET_HL;
+1235: 	AF_  = Z_Z80_VALUE_AFTER_RESET_AF_;
+1236: 	BC_  = Z_Z80_VALUE_AFTER_RESET_BC_;
+1237: 	DE_  = Z_Z80_VALUE_AFTER_RESET_DE_;
+1238: 	HL_  = Z_Z80_VALUE_AFTER_RESET_HL_;
+1239: 	R    = Z_Z80_VALUE_AFTER_RESET_R;
+1240: 	I    = Z_Z80_VALUE_AFTER_RESET_I;
+1241: 	IFF1 = Z_Z80_VALUE_AFTER_RESET_IFF1;
+1242: 	IFF2 = Z_Z80_VALUE_AFTER_RESET_IFF2;
+1243: 	IM   = Z_Z80_VALUE_AFTER_RESET_IM;
+1244: 	EI = HALT = INT = NMI = 0;
+1245: 	}
+1246: CPU_Z80_API zusize z80_run(Z80 *object, zusize cycles)
+1247: 	{
+1248: 	zuint32 data;
+1249: 	/*-------------.
+1250: 	| Clear cycles |
+1251: 	'-------------*/
+1252: 	CYCLES = 0;
+1253: 	/*--------------.
+1254: 	| Backup R7 bit |
+1255: 	'--------------*/
+1256: 	R7 = R;
+1257: 	/*------------------------------.
+1258: 	| Execute until cycles consumed |
+1259: 	'------------------------------*/
+1260: 	while (CYCLES < cycles)
+1261: 		{
+1262: 		/*--------------------------------------.
+1263: 		| Jump to NMI handler if NMI pending... |
+1264: 		'--------------------------------------*/
+1265: 		if (NMI)
+1266: 			{
+1267: 			EXIT_HALT;			/* Resume CPU if halted.				   */
+1268: 			R++;				/* Consume memory refresh.				   */
+1269: 			NMI = FALSE;			/* Clear the NMI pulse.					   */
+1270: 			/*IFF2 = IFF1;*/		/* Backup IFF1 (it doesn't occur, acording to Sean Young). */
+1271: 			IFF1 = 0;			/* Reset IFF1 to don't bother the NMI routine.		   */
+1272: 			PUSH(PC);			/* Save return addres in the stack.			   */
+1273: 			PC = Z_Z80_ADDRESS_NMI_POINTER;	/* Make PC point to the NMI routine.			   */
+1274: 			CYCLES += 11;			/* Accepting a NMI consumes 11 cycles.			   */
+1275: 			continue;
+1276: 			}
+1277: 		/*--------------------------.
+1278: 		| Execute INT if pending... |
+1279: 		'--------------------------*/
+1280: 		if (INT && IFF1 && !EI)
+1281: 			{
+1282: 			EXIT_HALT;	 /* Resume CPU on halt.		*/
+1283: 			R++;		 /* Consume memory refresh.	*/
+1284: 			IFF1 = IFF2 = 0; /* Clear interrupt flip-flops.	*/
+1285: 			switch (IM)
+1286: 				{
+1287: 				/*------------------------------.
+1288: 				| IM 0: Execute bus instruction |
+1289: 				'------------------------------*/
+1290: 				case 0:
+1291: 				if ((data = INT_DATA)) switch (data & Z_UINT32(0xFF000000))
+1292: 					{
+1293: 					case Z_UINT32(0xC3000000): /* JP */
+1294: 					PC = (zuint16)(data >> 8);
+1295: 					CYCLES += 10;
+1296: 					break;
+1297: 					case Z_UINT32(0xCD000000): /* CALL */
+1298: 					PUSH(PC);
+1299: 					PC = (zuint16)(data >> 8);
+1300: 					CYCLES += 17;
+1301: 					break;
+1302: 					default: /* RST (and possibly others) */
+1303: 					PUSH(PC);
+1304: 					PC = (zuint16)((data >> 8) & 0x38);
+1305: 					CYCLES += 11;
+1306: 					}
+1307: 				CYCLES += 2;
+1308: 				break;
+1309: 				/*----------------------.
+1310: 				| IM 1: Execute rst 38h |
+1311: 				'----------------------*/
+1312: 				case 1:
+1313: 				PUSH(PC);
+1314: 				PC = 0x38;
+1315: 				CYCLES += (11 + 2);
+1316: 				break;
+1317: 				/*---------------------------.
+1318: 				| IM 2: Execute rst [i:byte] |
+1319: 				'---------------------------*/
+1320: 				case 2:
+1321: 				PUSH(PC);
+1322: 				PC = READ_16(((zuint16)(I << 8)) | (INT_DATA & 0xFF));
+1323: 				CYCLES += (17 + 2);
+1324: 				break;
+1325: 				}
+1326: 			continue;
+1327: 			}
+1328: 		/*---------------------------------------.
+1329: 		| Consume memory refresh and update bits |
+1330: 		'---------------------------------------*/
+1331: 		R++;
+1332: 		EI = FALSE;
+1333: 		/*-----------------------------------------------.
+1334: 		| Execute instruction and update consumed cycles |
+1335: 		'-----------------------------------------------*/
+1336: 		CYCLES += instruction_table[BYTE0 = READ_8(PC)](object);
+1337: 		}
+1338: 	/*---------------.
+1339: 	| Restore R7 bit |
+1340: 	'---------------*/
+1341: 	R = R_ALL;
+1342: 	/*-----------------------.
+1343: 	| Return consumed cycles |
+1344: 	'-----------------------*/
+1345: 	return CYCLES;
+1346: 	}
+1347: CPU_Z80_API void z80_nmi(Z80 *object)		      {NMI = TRUE ;}
+1348: CPU_Z80_API void z80_int(Z80 *object, zboolean state) {INT = state;}
+1349: /* MARK: - ABI */
+1350: #ifdef CPU_Z80_WITH_ABI
+1351: 	static void will_read_state(Z80 *object) {R  = R_ALL;}
+1352: 	static void did_write_state(Z80 *object) {R7 = R;    }
+1353: 	static ZCPUEmulatorExport const exports[7] = {
+1354: 		{Z_EMULATOR_FUNCTION_POWER,	      {(void (*)(void))z80_power      }},
+1355: 		{Z_EMULATOR_FUNCTION_RESET,	      {(void (*)(void))z80_reset      }},
+1356: 		{Z_EMULATOR_FUNCTION_RUN,	      {(void (*)(void))z80_run	      }},
+1357: 		{Z_EMULATOR_FUNCTION_WILL_READ_STATE, {(void (*)(void))will_read_state}},
+1358: 		{Z_EMULATOR_FUNCTION_DID_WRITE_STATE, {(void (*)(void))did_write_state}},
+1359: 		{Z_EMULATOR_FUNCTION_NMI,	      {(void (*)(void))z80_nmi	      }},
+1360: 		{Z_EMULATOR_FUNCTION_IRQ,	      {(void (*)(void))z80_int	      }}
+1361: 	};
+1362: 	static ZCPUEmulatorInstanceImport const instance_imports[6] = {
+1363: 		{Z_EMULATOR_FUNCTION_READ_8BIT,	 O(read	   )},
+1364: 		{Z_EMULATOR_FUNCTION_WRITE_8BIT, O(write   )},
+1365: 		{Z_EMULATOR_FUNCTION_IN_8BIT,	 O(in	   )},
+1366: 		{Z_EMULATOR_FUNCTION_OUT_8BIT,	 O(out	   )},
+1367: 		{Z_EMULATOR_FUNCTION_IRQ_DATA,	 O(int_data)},
+1368: 		{Z_EMULATOR_FUNCTION_HALT,	 O(halt	   )}
+1369: 	};
+1370: 	CPU_Z80_ABI ZCPUEmulatorABI const abi_emulation_cpu_z80 = {
+1371: 		/* dependency_count	 */ 0,
+1372: 		/* dependencies		 */ NULL,
+1373: 		/* export_count		 */ 7,
+1374: 		/* exports		 */ exports,
+1375: 		/* instance_size	 */ sizeof(Z80),
+1376: 		/* instance_state_offset */ O(state),
+1377: 		/* instance_state_size	 */ sizeof(ZZ80State),
+1378: 		/* instance_import_count */ 6,
+1379: 		/* instance_imports	 */ instance_imports
+1380: 	};
+1381: #endif
+1382: #ifdef CPU_Z80_WITH_MODULE_ABI
+1383: #	include <Z/ABIs/generic/module.h>
+1384: 	static ZModuleUnit const unit = {"Z80", "Z80", Z_VERSION(0, 1, 0), &abi_emulation_cpu_z80};
+1385: 	static ZModuleDomain const domain = {"Emulation.CPU", Z_VERSION(1, 0, 0), 1, &unit};
+1386: 	Z_API_WEAK_EXPORT ZModuleABI const __module_abi__ = {1, &domain};
+1387: #endif
+1388: /* Z80.c EOF */
+</file>
+
+<file path="src/emu/Z80.h">
+  1: /*  ______   ______  ______
+  2:    /\___  \ /\  __ \/\     \
+  3:    \/__/  /_\ \  __ \ \  \  \
+  4:       /\_____\ \_____\ \_____\
+  5: Zilog \/_____/\/_____/\/_____/ CPU Emulator
+  6: Copyright (C) 1999-2018 Manuel Sainz de Baranda y Goñi.
+  7: This emulator is free software: you can redistribute it and/or modify it under
+  8: the terms of the GNU General Public License as published  by the Free Software
+  9: Foundation, either  version 3 of  the License, or  (at your option)  any later
+ 10: version.
+ 11: This emulator is distributed  in the hope that it will  be useful, but WITHOUT
+ 12: ANY WARRANTY; without even the  implied warranty of MERCHANTABILITY or FITNESS
+ 13: FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+ 14: You should have received  a copy of the GNU General Public License  along with
+ 15: this emulator. If not, see <http://www.gnu.org/licenses/>. */
+ 16: #ifndef _emulation_CPU_Z80_H_
+ 17: #define _emulation_CPU_Z80_H_
+ 18: #ifdef CPU_Z80_DEPENDENCIES_H
+ 19: #	include CPU_Z80_DEPENDENCIES_H
+ 20: #else
+ 21: #	include <Z/hardware/CPU/architecture/Z80.h>
+ 22: #endif
+ 23: /** Z80 emulator instance.
+ 24:   * @details This structure contains the state of the emulated CPU and callback
+ 25:   * pointers necessary to interconnect the emulator with external logic. There
+ 26:   * is no constructor function, so, before using an object of this type, some
+ 27:   * of its members must be initialized, in particular the following:
+ 28:   * @c context, @c read, @c write, @c in, @c out, @c int_data and @c halt. */
+ 29: typedef struct {
+ 30: 	/** Number of cycles executed in the current call to @c z80_run.
+ 31: 	  * @details @c z80run sets this variable to @c 0 before starting
+ 32: 	  * to execute instructions and its value persists after returning.
+ 33: 	  * The callbacks can use this variable to know during what cycle
+ 34: 	  * they are being called. */
+ 35: 	zusize cycles;
+ 36: 	/** The value used as the first argument when calling a callback.
+ 37: 	  * @details This variable should be initialized before using the
+ 38: 	  * emulator and can be used to reference the context/instance of
+ 39: 	  * the machine being emulated. */
+ 40: 	void *context;
+ 41: 	/** Callback: Called when the CPU needs to read 8 bits from memory.
+ 42: 	  * @param context The value of the member @c context.
+ 43: 	  * @param address The memory address to read from.
+ 44: 	  * @return The 8 bits read from memory. */
+ 45: 	zuint8 (* read)(void *context, zuint16 address);
+ 46: 	/** Callback: Called when the CPU needs to write 8 bits to memory.
+ 47: 	  * @param context The value of the member @c context.
+ 48: 	  * @param address The memory address to write to.
+ 49: 	  * @param value The value to write. */
+ 50: 	void (* write)(void *context, zuint16 address, zuint8 value);
+ 51: 	/** Callback: Called when the CPU needs to read 8 bits from an I/O port.
+ 52: 	  * @param context The value of the member @c context.
+ 53: 	  * @param port The number of the I/O port to read from.
+ 54: 	  * @return The 8 bits read from the I/O port. */
+ 55: 	zuint8 (* in)(void *context, zuint16 port);
+ 56: 	/** Callback: Called when the CPU needs to write 8 bits to an I/O port.
+ 57: 	  * @param context The value of the member @c context.
+ 58: 	  * @param port The number of the I/O port to write to.
+ 59: 	  * @param value The value to write. */
+ 60: 	void (* out)(void *context, zuint16 port, zuint8 value);
+ 61: 	/** Callback: Called when the CPU needs to read one instruction from
+ 62: 	  * the data bus to service a maskable interrupt (INT) in mode 0.
+ 63: 	  * @param context The value of the member @c context.
+ 64: 	  * @return A 32-bit value containing the bytes of one instruction. The
+ 65: 	  * instruction must begin at the most significant byte (big endian). */
+ 66: 	zuint32 (* int_data)(void *context);
+ 67: 	/** Callback: Called when the CPU enters or exits the halt state.
+ 68: 	  * @param context The value of the member @c context.
+ 69: 	  * @param state @c TRUE if halted; @c FALSE otherwise.
+ 70: 	  * @note This callback is optional and must be set to @c NULL if not
+ 71: 	  * used. */
+ 72: 	void (* halt)(void *context, zboolean state);
+ 73: 	/** Callback: Called when the LD H,H opcode is executed.
+ 74: 	  * @param context The value of the member @c context.
+ 75: 	  * @param address The current program counter address. */
+ 76: 	void(* hook)(void *context, zuint16 address);
+ 77: 	/** CPU registers and internal bits.
+ 78: 	  * @details It contains the state of the registers, as well as the
+ 79: 	  * interrupt flip-flops, variables related to interrupts and other
+ 80: 	  * necessary flags. This is what a debugger should use as its data
+ 81: 	  * source. */
+ 82: 	ZZ80State state;
+ 83: 	/** Backup of the 7th bit of the R register.
+ 84: 	  * @details The value of the R register is incremented as instructions
+ 85: 	  * are executed, but its most significant bit remains unchanged. For
+ 86: 	  * optimization reasons, this bit is saved at the beginning of the
+ 87: 	  * execution of @c z80_run and restored before returning. If an
+ 88: 	  * instruction directly affects the R register, this variable is also
+ 89: 	  * updated accordingly. */
+ 90: 	zuint8 r7;
+ 91: 	/** Temporay IX/IY register for instructions with @c DDh/FDh prefix.
+ 92: 	  * @details Since instructions with prefix @c DDh and @c FDh behave
+ 93: 	  * similarly, differing only in the use of register IX or IY, for
+ 94: 	  * reasons of size optimization, a single register is used that acts
+ 95: 	  * as both. During opcode analysis, the IX or IY register is copied
+ 96: 	  * to this variable and, once the instruction emulation is complete,
+ 97: 	  * its contents are copied back to the appropriate register. */
+ 98: 	Z16Bit xy;
+ 99: 	/** Temporary storage for opcode fetching.
+100: 	  * @details This is an internal private variable. */
+101: 	Z32Bit data;
+102: } Z80;
+103: Z_C_SYMBOLS_BEGIN
+104: #ifndef CPU_Z80_API
+105: #	ifdef CPU_Z80_STATIC
+106: #		define CPU_Z80_API
+107: #	else
+108: #		define CPU_Z80_API Z_API
+109: #	endif
+110: #endif
+111: /** Changes the CPU power status.
+112:   * @param object A pointer to a Z80 emulator instance.
+113:   * @param state @c TRUE = power ON; @c FALSE = power OFF. */
+114: CPU_Z80_API void z80_power(Z80 *object, zboolean state);
+115: /** Resets the CPU.
+116:   * @details This is equivalent to a pulse on the RESET line of a real Z80.
+117:   * @param object A pointer to a Z80 emulator instance. */
+118: CPU_Z80_API void z80_reset(Z80 *object);
+119: /** Runs the CPU for a given number of @p cycles.
+120:   * @param object A pointer to a Z80 emulator instance.
+121:   * @param cycles The number of cycles to be executed.
+122:   * @return The number of cycles executed.
+123:   * @note Given the fact that one Z80 instruction needs between 4 and 23 cycles
+124:   * to be executed, it's not always possible to run the CPU the exact number of
+125:   * @p cycles specfified. */
+126: CPU_Z80_API zusize z80_run(Z80 *object, zusize cycles);
+127: /** Performs a non-maskable interrupt (NMI).
+128:   * @details This is equivalent to a pulse on the NMI line of a real Z80.
+129:   * @param object A pointer to a Z80 emulator instance. */
+130: CPU_Z80_API void z80_nmi(Z80 *object);
+131: /** Changes the state of the maskable interrupt (INT).
+132:   * @details This is equivalent to a change on the INT line of a real Z80.
+133:   * @param object A pointer to a Z80 emulator instance.
+134:   * @param state @c TRUE = line high; @c FALSE = line low. */
+135: CPU_Z80_API void z80_int(Z80 *object, zboolean state);
+136: Z_C_SYMBOLS_END
+137: #ifdef CPU_Z80_WITH_ABI
+138: #	ifndef CPU_Z80_DEPENDENCIES_H
+139: #		include <Z/ABIs/generic/emulation.h>
+140: #	endif
+141: 	Z_C_SYMBOLS_BEGIN
+142: #	ifndef CPU_Z80_ABI
+143: #		ifdef CPU_Z80_STATIC
+144: #			define CPU_Z80_ABI
+145: #		else
+146: #			define CPU_Z80_ABI Z_API
+147: #		endif
+148: #	endif
+149: 	CPU_Z80_ABI extern ZCPUEmulatorABI const abi_emulation_cpu_z80;
+150: 	Z_C_SYMBOLS_END
+151: #endif
+152: #endif /* _emulation_CPU_Z80_H_ */
+</file>
+
+<file path="src/main.tsx">
+1: import React from 'react';
+2: import ReactDOM from 'react-dom/client';
+3: import App from './App';
+4: import './style.css';
+5: ReactDOM.createRoot(document.getElementById('root')!).render(
+6:   <React.StrictMode><App /></React.StrictMode>,
+7: );
+</file>
+
+<file path="src/vite-env.d.ts">
+1: /// <reference types="vite/client" />
+</file>
+
+<file path="package.json">
+ 1: {
+ 2:   "name": "starquake-tilemap-web",
+ 3:   "private": true,
+ 4:   "version": "0.1.0",
+ 5:   "type": "module",
+ 6:   "scripts": {
+ 7:     "dev": "vite --host 0.0.0.0",
+ 8:     "build": "tsc --noEmit && vite build",
+ 9:     "preview": "vite preview --host 0.0.0.0",
+10:     "build:wasm": "sh scripts/build-wasm.sh",
+11:     "test:assets": "node scripts/validate-assets.mjs",
+12:     "test": "npm run test:assets && node scripts/smoke-wasm.mjs"
+13:   },
+14:   "dependencies": {
+15:     "lucide-react": "0.468.0",
+16:     "react": "18.3.1",
+17:     "react-dom": "18.3.1",
+18:     "repomix": "^1.18.1"
+19:   },
+20:   "devDependencies": {
+21:     "@types/react": "18.3.18",
+22:     "@types/react-dom": "18.3.5",
+23:     "@vitejs/plugin-react": "4.3.4",
+24:     "typescript": "5.7.2",
+25:     "vite": "5.4.14"
+26:   }
+27: }
+</file>
+
+<file path="tsconfig.json">
+ 1: {
+ 2:   "compilerOptions": {
+ 3:     "target": "ES2022",
+ 4:     "useDefineForClassFields": true,
+ 5:     "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+ 6:     "allowJs": false,
+ 7:     "skipLibCheck": true,
+ 8:     "esModuleInterop": true,
+ 9:     "allowImportingTsExtensions": true,
+10:     "strict": true,
+11:     "forceConsistentCasingInFileNames": true,
+12:     "module": "ESNext",
+13:     "moduleResolution": "Bundler",
+14:     "resolveJsonModule": true,
+15:     "isolatedModules": true,
+16:     "noEmit": true,
+17:     "jsx": "react-jsx"
+18:   },
+19:   "include": ["src"]
+20: }
+</file>
+
+<file path="vite.config.ts">
+ 1: import { defineConfig } from 'vite';
+ 2: import react from '@vitejs/plugin-react';
+ 3: const isolationHeaders = {
+ 4:   'Cross-Origin-Opener-Policy': 'same-origin',
+ 5:   'Cross-Origin-Embedder-Policy': 'require-corp',
+ 6: };
+ 7: export default defineConfig({
+ 8:   base: '/SqTileMapWeb/',
+ 9:   plugins: [react()],
+10:   publicDir: 'public',
+11:   worker: { format: 'es' },
+12:   server: { headers: isolationHeaders },
+13:   preview: { headers: isolationHeaders },
+14:   build: { target: 'es2022' },
+15: });
+</file>
+
+<file path="src/spectrum.ts">
+ 1: const normal = [
+ 2:   [0, 0, 0], [0, 0, 205], [205, 0, 0], [205, 0, 205],
+ 3:   [0, 205, 0], [0, 205, 205], [205, 205, 0], [205, 205, 205],
+ 4: ];
+ 5: const bright = [
+ 6:   [0, 0, 0], [0, 0, 255], [255, 0, 0], [255, 0, 255],
+ 7:   [0, 255, 0], [0, 255, 255], [255, 255, 0], [255, 255, 255],
+ 8: ];
+ 9: const palette = [normal, bright];
+10: const pixelLookup = new Uint32Array(2 * 256 * 256 * 8);
+11: for (let flash = 0; flash < 2; flash++) {
+12:   for (let attr = 0; attr < 256; attr++) {
+13:     const colours = palette[(attr >> 6) & 1];
+14:     const ink = attr & 7;
+15:     const paper = (attr >> 3) & 7;
+16:     const swap = flash && (attr & 0x80) !== 0;
+17:     for (let bitmap = 0; bitmap < 256; bitmap++) {
+18:       const base = (((flash * 256 + attr) * 256 + bitmap) * 8);
+19:       for (let bit = 0; bit < 8; bit++) {
+20:         const set = ((bitmap >> (7 - bit)) & 1) !== 0;
+21:         const colour = colours[(set !== Boolean(swap)) ? ink : paper];
+22:         pixelLookup[base + bit] = (255 << 24) | (colour[2] << 16) | (colour[1] << 8) | colour[0];
+23:       }
+24:     }
+25:   }
+26: }
+27: const imageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
+28: const hudImageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
+29: export function spectrumScreenHasFlash(screen: Uint8Array) {
+30:   for (let i = 0x1800; i < 0x1b00; i++) if (screen[i] & 0x80) return true;
+31:   return false;
+32: }
+33: export function paintSpectrumRoom(
+34:   target: CanvasRenderingContext2D,
+35:   room: number,
+36:   screen: Uint8Array,
+37:   flashPhase: boolean,
+38: ) {
+39:   let image = imageDataCache.get(target);
+40:   if (!image) {
+41:     image = target.createImageData(256, 144);
+42:     imageDataCache.set(target, image);
+43:   }
+44:   const out = new Uint32Array(image.data.buffer, image.data.byteOffset, image.data.byteLength / 4);
+45:   let dest = 0;
+46:   const flash = flashPhase ? 1 : 0;
+47:   for (let y = 48; y < 192; y++) {
+48:     const bitmapBase = ((y & 0xc0) << 5) | ((y & 0x38) << 2) | ((y & 7) << 8);
+49:     const attrBase = 0x1800 + ((y >> 3) << 5);
+50:     for (let byteX = 0; byteX < 32; byteX++) {
+51:       const bitmap = screen[bitmapBase + byteX];
+52:       const attr = screen[attrBase + byteX];
+53:       const lookup = (((flash * 256 + attr) * 256 + bitmap) * 8);
+54:       for (let bit = 0; bit < 8; bit++) out[dest + bit] = pixelLookup[lookup + bit];
+55:       dest += 8;
+56:     }
+57:   }
+58:   target.putImageData(image, (room % 16) * 256, Math.floor(room / 16) * 144);
+59: }
+60: export function paintSpectrumHud(target: CanvasRenderingContext2D, screen: Uint8Array) {
+61:   let image = hudImageDataCache.get(target);
+62:   if (!image) {
+63:     image = target.createImageData(256, 48);
+64:     hudImageDataCache.set(target, image);
+65:   }
+66:   const out = new Uint32Array(image.data.buffer, image.data.byteOffset, image.data.byteLength / 4);
+67:   let dest = 0;
+68:   for (let y = 0; y < 48; y++) {
+69:     const bitmapBase = ((y & 0xc0) << 5) | ((y & 0x38) << 2) | ((y & 7) << 8);
+70:     const attrBase = 0x1800 + ((y >> 3) << 5);
+71:     for (let byteX = 0; byteX < 32; byteX++) {
+72:       const bitmap = screen[bitmapBase + byteX];
+73:       const attr = screen[attrBase + byteX];
+74:       const lookup = (((attr >> 6) & 1) * 256 + attr) * 256 + bitmap;
+75:       const pixelBase = lookup * 8;
+76:       for (let bit = 0; bit < 8; bit++) out[dest + bit] = pixelLookup[pixelBase + bit];
+77:       dest += 8;
+78:     }
+79:   }
+80:   target.putImageData(image, 0, 0);
+81: }
+82: export const MAP_WIDTH = 16 * 256;
+83: export const MAP_HEIGHT = 32 * 144;
+</file>
+
+<file path="src/emu/emu.worker.ts">
+  1: /// <reference lib="webworker" />
+  2: type ModuleMessage = { type: 'module'; memory?: WebAssembly.Memory; shared: boolean; workerIndex: number; workerCount: number };
+  3: type InitMessage = { type: 'init'; snapshot: ArrayBuffer; rom: ArrayBuffer; cheats: boolean };
+  4: type KeyMessage = { type: 'keys'; rows: number[] };
+  5: type BeginMessage = { type: 'begin'; frameId: number };
+  6: type TickMessage = { type: 'tick'; frameId: number; backgroundDivisor: number; minCol: number; maxCol: number; minRow: number; maxRow: number };
+  7: type CollectMessage = { type: 'collect'; frameId: number; forceRoom?: number };
+  8: type DebugMessage = { type: 'debug-capture'; captureId: number };
+  9: type Incoming = ModuleMessage | InitMessage | KeyMessage | BeginMessage | TickMessage | CollectMessage | DebugMessage | { type: 'stop' };
+ 10: let wasm: WebAssembly.Exports | null = null;
+ 11: let memory: WebAssembly.Memory | null = null;
+ 12: let workerIndex = 0;
+ 13: let workerCount = 1;
+ 14: let shared = false;
+ 15: let rangeStart = 0;
+ 16: let rangeEnd = 512;
+ 17: const scope = self as unknown as DedicatedWorkerGlobalScope;
+ 18: async function loadModule(message: ModuleMessage) {
+ 19:   workerIndex = message.workerIndex;
+ 20:   workerCount = message.workerCount;
+ 21:   shared = message.shared;
+ 22:   rangeStart = Math.floor(512 * workerIndex / workerCount);
+ 23:   rangeEnd = Math.floor(512 * (workerIndex + 1) / workerCount);
+ 24:   const base = import.meta.env.BASE_URL;
+ 25:   const response = await fetch(`${base}${shared ? 'z80-shared.wasm' : 'z80-single.wasm'}`);
+ 26:   if (!response.ok) throw new Error(`Could not load Z80 WebAssembly module (${response.status})`);
+ 27:   const bytes = await response.arrayBuffer();
+ 28:   let result: WebAssembly.WebAssemblyInstantiatedSource;
+ 29:   if (shared) {
+ 30:     if (!message.memory) throw new Error('Shared WebAssembly memory was not supplied.');
+ 31:     memory = message.memory;
+ 32:     result = await WebAssembly.instantiate(bytes, { env: { memory } });
+ 33:   } else {
+ 34:     result = await WebAssembly.instantiate(bytes, {});
+ 35:     memory = result.instance.exports.memory as WebAssembly.Memory;
+ 36:   }
+ 37:   wasm = result.instance.exports;
+ 38:   const e = wasm as Record<string, any>;
+ 39:   if (shared) {
+ 40:     const stackSize = 1024 * 1024;
+ 41:     e.__stack_pointer.value = e.__stack_high.value - workerIndex * stackSize;
+ 42:   }
+ 43:   scope.postMessage({ type: 'module-ready', workerIndex, workerCount, shared, rangeStart, rangeEnd });
+ 44: }
+ 45: function initialise(message: InitMessage) {
+ 46:   if (!wasm || !memory || workerIndex !== 0) throw new Error('Only worker 0 can initialise the shared Starquake machine.');
+ 47:   const e = wasm as Record<string, any>;
+ 48:   const heapBase = (e.__heap_base?.value ?? e.__data_end?.value ?? 0) + 1024;
+ 49:   const snapshot = new Uint8Array(message.snapshot);
+ 50:   const rom = new Uint8Array(message.rom);
+ 51:   const snapshotPtr = heapBase;
+ 52:   const romPtr = snapshotPtr + snapshot.byteLength + 16;
+ 53:   const required = romPtr + rom.byteLength + 16;
+ 54:   if (required > memory.buffer.byteLength) memory.grow(Math.ceil((required - memory.buffer.byteLength) / 65536));
+ 55:   const heap = new Uint8Array(memory.buffer);
+ 56:   heap.set(snapshot, snapshotPtr);
+ 57:   heap.set(rom, romPtr);
+ 58:   const code = e.emu_init(snapshotPtr, snapshot.byteLength, romPtr, rom.byteLength, message.cheats ? 1 : 0);
+ 59:   if (code !== 0) {
+ 60:     if (code <= -2) throw new Error(`Starquake snapshot does not match TileMap's expected hook at index ${-2 - code}.`);
+ 61:     throw new Error('Snapshot must be an uncompressed 48K .sna file (49,179 bytes) and ROM must be at least 16 KB.');
+ 62:   }
+ 63:   scope.postMessage({ type: 'ready', roomCount: e.emu_room_count(), currentRoom: e.emu_current_room() });
+ 64: }
+ 65: function collect(frameId: number, forceRoom = -1) {
+ 66:   if (!wasm || !memory) return;
+ 67:   const e = wasm as Record<string, any>;
+ 68:   const heap = new Uint8Array(memory.buffer);
+ 69:   const dirty: { room: number; screen: ArrayBuffer }[] = [];
+ 70:   for (let room = rangeStart; room < rangeEnd; room++) {
+ 71:     /* take_dirty must always run so the flag is cleared; forceRoom sends the screen even if it is not dirty. */
+ 72:     if (e.emu_take_dirty(room) || room === forceRoom) {
+ 73:       const ptr = e.emu_screen_ptr(room) >>> 0;
+ 74:       dirty.push({ room, screen: heap.slice(ptr, ptr + 6912).buffer });
+ 75:     }
+ 76:   }
+ 77:   let audioEvents = new Uint32Array(0);
+ 78:   let audioLast = 0;
+ 79:   if (workerIndex === 0) {
+ 80:     const count = Math.min(4096, e.emu_audio_count());
+ 81:     if (count) audioEvents = new Uint32Array(memory.buffer, e.emu_audio_ptr() >>> 0, count).slice();
+ 82:     audioLast = e.emu_audio_last();
+ 83:   }
+ 84:   scope.postMessage({ type: 'collected', frameId, workerIndex, dirty, audioEvents, audioLast, currentRoom: e.emu_current_room(), gameOver: workerIndex === 0 && typeof e.emu_game_over === 'function' && e.emu_game_over() !== 0, audioOverflow: workerIndex === 0 && e.emu_audio_overflowed() !== 0 }, [...dirty.map(x => x.screen), audioEvents.buffer as ArrayBuffer]);
+ 85: }
+ 86: scope.onmessage = (event: MessageEvent<Incoming>) => {
+ 87:   const message = event.data;
+ 88:   try {
+ 89:     if (message.type === 'module') {
+ 90:       loadModule(message).catch(error => scope.postMessage({ type: 'error', message: error instanceof Error ? error.message : String(error) }));
+ 91:     } else if (message.type === 'init') {
+ 92:       initialise(message);
+ 93:     } else if (message.type === 'keys' && wasm) {
+ 94:       const e = wasm as Record<string, any>;
+ 95:       message.rows.forEach((value, row) => e.emu_set_key_row(row, value));
+ 96:     } else if (message.type === 'begin' && wasm && workerIndex === 0) {
+ 97:       (wasm as Record<string, any>).emu_begin_frame();
+ 98:       scope.postMessage({ type: 'begin-done', frameId: message.frameId });
+ 99:     } else if (message.type === 'tick' && wasm) {
+100:       (wasm as Record<string, any>).emu_tick_range(rangeStart, rangeEnd, 50, message.frameId, message.backgroundDivisor, message.minCol, message.maxCol, message.minRow, message.maxRow);
+101:       scope.postMessage({ type: 'tick-done', frameId: message.frameId, workerIndex });
+102:     } else if (message.type === 'collect') {
+103:       collect(message.frameId, message.forceRoom ?? -1);
+104:     } else if (message.type === 'debug-capture' && wasm && memory) {
+105:       const e = wasm as Record<string, any>;
+106:       const heap = new Uint8Array(memory.buffer);
+107:       const room = e.emu_current_room() | 0;
+108:       const hasWriteTrace = ['emu_debug_ram_ptr', 'emu_debug_pc', 'emu_debug_sp', 'emu_debug_write_ptr', 'emu_debug_write_count', 'emu_debug_write_capacity', 'emu_debug_clear_writes'].every(name => typeof e[name] === 'function');
+109:       const ramPointer = (hasWriteTrace ? e.emu_debug_ram_ptr() : e.emu_screen_ptr(room)) >>> 0;
+110:       const ram = heap.slice(ramPointer, ramPointer + 49152);
+111:       const writeCount = hasWriteTrace ? Math.max(0, e.emu_debug_write_count() | 0) : 0;
+112:       const writeCapacity = hasWriteTrace ? e.emu_debug_write_capacity() | 0 : 0;
+113:       const writeBytes = Math.min(writeCount, writeCapacity) * 8;
+114:       const writes = new Uint8Array(writeBytes);
+115:       if (hasWriteTrace && writeCapacity > 0) {
+116:         const writePointer = e.emu_debug_write_ptr() >>> 0;
+117:         const firstRecord = writeCount > writeCapacity ? writeCount % writeCapacity : 0;
+118:         for (let i = 0; i < writeBytes; i++) {
+119:           writes[i] = heap[writePointer + ((firstRecord * 8 + i) % (writeCapacity * 8))];
+120:         }
+121:       }
+122:       const result = {
+123:         captureId: message.captureId,
+124:         capturedAt: new Date().toISOString(),
+125:         room,
+126:         pc: (hasWriteTrace ? e.emu_debug_pc() : e.emu_room_pc(room)) & 0xffff,
+127:         sp: (hasWriteTrace ? e.emu_debug_sp() : e.emu_room_sp(room)) & 0xffff,
+128:         writeTraceAvailable: hasWriteTrace,
+129:         writeCount,
+130:         writeCapacity,
+131:         ram: ram.buffer,
+132:         writes: writes.buffer,
+133:       };
+134:       if (hasWriteTrace) e.emu_debug_clear_writes();
+135:       scope.postMessage({ type: 'debug-captured', ...result }, [ram.buffer, writes.buffer]);
+136:     } else if (message.type === 'stop') {
+137:       scope.close();
+138:     }
+139:   } catch (error) {
+140:     scope.postMessage({ type: 'error', message: error instanceof Error ? error.message : String(error) });
+141:   }
+142: };
+</file>
+
+<file path="src/style.css">
+ 1: :root{font-family:'Space Grotesk',system-ui,sans-serif;color:#e8edf6;background:#080d16;font-synthesis:none;text-rendering:optimizeLegibility}*{box-sizing:border-box}html,body,#root{width:100%;height:100%;margin:0;overflow:hidden}button,input{font:inherit}.app-shell{height:100%;display:flex;flex-direction:column;background:radial-gradient(ellipse at 22% -10%,#15233a 0,#080d16 46%);min-width:760px}.topbar{height:66px;display:flex;align-items:center;padding:0 22px;border-bottom:1px solid #1c2a3d;gap:28px;flex-shrink:0;background:rgba(7,12,21,.88)}.brand{display:flex;align-items:center;gap:11px;min-width:195px}.brand-blob{width:42px;height:42px;object-fit:contain;image-rendering:pixelated;flex-shrink:0}.brand strong{display:block;letter-spacing:.16em;font-size:13px}.brand span{display:block;font-family:'DM Mono',monospace;font-size:9px;color:#8290a4;letter-spacing:.11em;margin-top:3px}.top-status{display:flex;align-items:center;gap:9px;color:#9ba9bd;font-size:11px;flex:1;white-space:nowrap}.status-dot{width:7px;height:7px;border-radius:50%;background:#b58c43;box-shadow:0 0 10px #b58c4360}.status-dot.ready{background:#64b7a2}.status-dot.live{background:#7de0a8;box-shadow:0 0 11px #7de0a8}.icon-button:hover{border-color:#e3bd68;color:#f2d48c}.toolbar{height:52px;display:flex;align-items:center;padding:0 22px;gap:18px;background:#0c1421;border-bottom:1px solid #1b293c;flex-shrink:0}.transport,.zoom-controls{display:flex;align-items:center;gap:7px}.primary-button,.icon-button{height:31px;border:1px solid #33445d;border-radius:4px;background:#142238;color:#dce5f2;display:flex;align-items:center;justify-content:center;gap:7px;cursor:pointer}.primary-button{padding:0 13px;font-size:11px;font-weight:600;background:#d9b65f;color:#161a20;border-color:#d9b65f}.primary-button:disabled{opacity:.4;cursor:not-allowed}.icon-button{width:31px;padding:0;background:#111c2b}.zoom-controls{padding-left:10px;border-left:1px solid #27364a;gap:3px}.zoom-controls span{min-width:43px;text-align:center;color:#aab8ca;font:11px 'DM Mono',monospace}.toolbar-spacer{flex:1}.sound-button{margin-right:4px}.workspace{flex:1;min-height:0;display:flex;position:relative}.map-viewport{flex:1;min-width:0;position:relative;overflow:hidden;background-color:#070b12;background-image:radial-gradient(#24364c 0.7px,transparent .7px);background-size:19px 19px;cursor:grab;touch-action:none}.map-viewport:active{cursor:grabbing}.world{position:absolute;left:0;top:0;width:4096px;height:4608px;transform-origin:0 0;will-change:transform}.map-canvas,.map-overlay{position:absolute;inset:0;width:4096px;height:4608px;image-rendering:pixelated}.map-overlay{pointer-events:none}.side-panel{width:268px;flex-shrink:0;background:#0c1421;border-left:1px solid #1d2a3c;padding:18px 17px;display:flex;flex-direction:column;gap:17px;overflow:auto}.panel-heading{display:flex;justify-content:space-between;align-items:center;color:#8d9bb0;font:10px 'DM Mono',monospace;letter-spacing:.12em}.live-label{color:#a8b6c7;font-size:9px}.active-room-card{padding:15px;background:linear-gradient(135deg,#17263a,#111c2d);border:1px solid #30425a;border-radius:5px}.room-label{color:#9eacbf;font:9px 'DM Mono',monospace;letter-spacing:.14em}.room-number{font:44px 'DM Mono',monospace;color:#f0cf7b;line-height:1.15;margin-top:5px}.room-coordinates{font:9px 'DM Mono',monospace;color:#8b9bb1;margin-top:5px}.room-coordinates i{display:inline-block;width:3px;height:3px;background:#65778f;border-radius:50%;margin:0 6px 2px}.panel-section{border-top:1px solid #223147;padding-top:13px}.panel-section h3{font:9px 'DM Mono',monospace;letter-spacing:.13em;color:#8493a9;margin:0 0 11px}.metric{display:flex;justify-content:space-between;gap:8px;margin:9px 0;font-size:10px;color:#8392a7}.metric b{font:10px 'DM Mono',monospace;color:#d4deeb;font-weight:400;text-align:right}.control-row{display:grid;grid-template-columns:43px 1fr 43px 1fr;align-items:center;gap:6px;margin:8px 0;color:#aab7c8;font-size:9px}.control-row kbd{display:inline-flex;justify-content:center;align-items:center;min-height:21px;border:1px solid #36465c;border-radius:3px;background:#152237;color:#e1e8f1;font:9px 'DM Mono',monospace;padding:2px 4px}.control-row kbd:only-child{grid-column:1}.control-row kbd:last-of-type:nth-child(1){grid-column:1}.panel-footer{margin-top:auto;padding-top:12px;border-top:1px solid #223147;color:#697a91;font:8px 'DM Mono',monospace;line-height:1.5}.footer{height:27px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-top:1px solid #1c2a3d;color:#66758b;font:8px 'DM Mono',monospace;letter-spacing:.07em;flex-shrink:0}.error-banner{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);z-index:5;background:#3a1b20;border:1px solid #a24a53;color:#ffd8dc;border-radius:5px;padding:10px 13px;font-size:11px;max-width:80%;box-shadow:0 8px 30px #0008}.error-banner button{margin-left:15px;border:0;background:transparent;color:#ffd8dc;text-decoration:underline;cursor:pointer;font-size:10px}
+ 2: .control-hint{display:block;margin-top:5px;color:#66788f;font:8px 'DM Mono',monospace;letter-spacing:.04em}
+ 3: .controls-config{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+ 4: .config-control{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0;color:#aab7c8;font-size:10px}
+ 5: .key-bind{min-width:62px;max-width:105px;min-height:27px;padding:4px 7px;border:1px solid #36465c;border-radius:4px;background:#152237;color:#e1e8f1;font:9px 'DM Mono',monospace;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ 6: .key-bind:hover{border-color:#e3bd68;color:#f2d48c}
+ 7: .key-bind.capturing{border-color:#e3bd68;background:#45371f;color:#ffe5a2;animation:key-pulse 1s ease-in-out infinite alternate}
+ 8: .control-help{margin:7px 0 10px;color:#718198;font-size:9px;line-height:1.4}
+ 9: @keyframes key-pulse{from{box-shadow:0 0 0 #e3bd6800}to{box-shadow:0 0 10px #e3bd6870}}
+10: /* Smooth room-to-room camera movement; zoom remains unchanged. */
+11: .world.smooth{transition:transform 340ms cubic-bezier(.22,.75,.25,1)}
+12: .controls-config{grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+13: .config-control{display:contents}
+14: .control-action{color:#aab7c8;font-size:10px}
+15: .key-value{min-width:54px;text-align:center;padding:5px 7px;border:1px solid #36465c;border-radius:4px;background:#152237;color:#e1e8f1;font:9px 'DM Mono',monospace}
+16: .edit-bind{min-width:47px;min-height:27px;padding:4px 8px;border:1px solid #465873;border-radius:4px;background:#1a2a40;color:#dce5f2;font-size:9px;font-weight:600;cursor:pointer}
+17: .edit-bind:hover{border-color:#e3bd68;color:#f2d48c}
+18: .edit-bind.capturing{border-color:#e3bd68;background:#45371f;color:#ffe5a2}
+19: .topbar{height:66px;justify-content:space-between;gap:16px}.header-controls{display:flex;align-items:center;gap:14px}.header-controls .sound-button{flex-shrink:0}.keyboard-mode-button{height:31px;padding:0 10px;border:1px solid #465873;border-radius:4px;background:#111c2b;color:#dce5f2;font:9px 'DM Mono',monospace;letter-spacing:.06em;cursor:pointer}.keyboard-mode-button:hover{border-color:#e3bd68;color:#f2d48c}.game-view{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.hud-strip{height:104px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:#0a111d;border-bottom:1px solid #1b293c}.hud-canvas{display:block;width:min(512px,calc(100% - 24px));height:auto;aspect-ratio:16/3;image-rendering:pixelated;object-fit:fill;pointer-events:none;border-radius:3px;background:#05080d;}
+</file>
+
+<file path="src/emu/bridge.c">
+  1: #include <stdint.h>
+  2: #include <stddef.h>
+  3: #include "Z80-support.h"
+  4: #include "Z80.h"
+  5: #define ROOM_COUNT 512
+  6: #define ROOM_W 256
+  7: #define ROOM_H 144
+  8: #define FRAME_CYCLES 70000
+  9: #define CYCLES_BEFORE_INT (FRAME_CYCLES - 32)
+ 10: #define BREAKPOINT 0x64
+ 11: typedef struct {
+ 12:   Z80 cpu;
+ 13:   uint8_t mem[65536];
+ 14:   int room;
+ 15:   int drawing;
+ 16:   int running;
+ 17:   int dirty;
+ 18:   int frame_cycles;
+ 19:   int visited;
+ 20:   int transitioned;
+ 21:   size_t run_budget;
+ 22:   volatile int lock;
+ 23: } Room;
+ 24: static Room rooms[ROOM_COUNT];
+ 25: static int current_room = 8;
+ 26: static uint8_t key_matrix[8] = {255,255,255,255,255,255,255,255};
+ 27: static int initialized = 0;
+ 28: static int hook_error = 0;
+ 29: static int cheat_mode = 0;
+ 30: static volatile int game_over = 0;
+ 31: static volatile int active_frame_number = 0;
+ 32: static volatile int transition_frame = -1;
+ 33: static volatile int transition_room = -1;
+ 34: static uint8_t *snapshot_mem;
+ 35: static uint8_t base_mem[65536];
+ 36: static ZZ80State snapshot_cpu;
+ 37: static uint32_t audio_events[4096];
+ 38: static volatile int audio_count = 0;
+ 39: static int audio_overflow = 0;
+ 40: static volatile int audio_last = 0;
+ 41: #define DEBUG_WRITE_CAPACITY 4096
+ 42: typedef struct {
+ 43:   uint16_t pc;
+ 44:   uint16_t address;
+ 45:   uint16_t frame_cycle;
+ 46:   uint8_t before;
+ 47:   uint8_t after;
+ 48: } DebugWrite;
+ 49: static DebugWrite debug_writes[DEBUG_WRITE_CAPACITY];
+ 50: static volatile uint32_t debug_write_count = 0;
+ 51: static const uint16_t hook_addresses[] = {0x672d,0xa45f,0xa475,0xd9cb,0xd9ce,0xc747,0xc35e,0xcbdc,0xa774,0xc462};
+ 52: static const uint8_t hook_opcodes[]   = {0xcd,  0xcd,  0xcd,  0xcd,  0xcd,  0x3a,  0x21,  0x7a,  0x21,  0x35};
+ 53: static void copy_bytes(uint8_t *dst, const uint8_t *src, size_t n) {
+ 54:   for (size_t i=0;i<n;i++) dst[i]=src[i];
+ 55: }
+ 56: static void zero_bytes(uint8_t *dst, size_t n) {
+ 57:   for (size_t i=0;i<n;i++) dst[i]=0;
+ 58: }
+ 59: static uint16_t peek16(Room *r, uint16_t a) {
+ 60:   return (uint16_t)(r->mem[a] | ((uint16_t)r->mem[(uint16_t)(a+1)] << 8));
+ 61: }
+ 62: static void poke16(Room *r, uint16_t a, uint16_t v) {
+ 63:   r->mem[a]=(uint8_t)v; r->mem[(uint16_t)(a+1)]=(uint8_t)(v>>8);
+ 64: }
+ 65: static void push16(Room *r, uint16_t v) {
+ 66:   Z_Z80_STATE_SP(&r->cpu.state)=(uint16_t)(Z_Z80_STATE_SP(&r->cpu.state)-2);
+ 67:   poke16(r,Z_Z80_STATE_SP(&r->cpu.state),v);
+ 68: }
+ 69: static void ret_cpu(Room *r) {
+ 70:   uint16_t sp=Z_Z80_STATE_SP(&r->cpu.state);
+ 71:   Z_Z80_STATE_PC(&r->cpu.state)=peek16(r,sp);
+ 72:   Z_Z80_STATE_SP(&r->cpu.state)=(uint16_t)(sp+2);
+ 73: }
+ 74: static void lock_room(Room *r) { while(__atomic_exchange_n(&r->lock,1,__ATOMIC_ACQUIRE)) { } }
+ 75: static void unlock_room(Room *r) { __atomic_store_n(&r->lock,0,__ATOMIC_RELEASE); }
+ 76: static void clone_room(Room *from, Room *to) {
+ 77:   if (from==to) return;
+ 78:   lock_room(to);
+ 79:   copy_bytes(to->mem,from->mem,65536);
+ 80:   to->cpu.state=from->cpu.state;
+ 81:   to->dirty=1;
+ 82:   unlock_room(to);
+ 83: }
+ 84: static int clone_room_for_entry(Room *from, Room *to, uint16_t room) {
+ 85:   if (from==to) return 0;
+ 86:   lock_room(to);
+ 87:   if(to->visited) {
+ 88:     to->cpu.state=from->cpu.state;
+ 89:     unlock_room(to);
+ 90:     return 0;
+ 91:   }
+ 92:   copy_bytes(to->mem,from->mem,65536);
+ 93:   to->cpu.state=from->cpu.state;
+ 94:   poke16(to,0xd2c8,room);
+ 95:   to->dirty=0;
+ 96:   to->drawing=0;
+ 97:   to->visited=1;
+ 98:   unlock_room(to);
+ 99:   return 1;
+100: }
+101: static void clone_all(Room *from) {
+102:   for(int i=0;i<ROOM_COUNT;i++) {
+103:     rooms[i].visited=0;
+104:     if(&rooms[i]!=from) clone_room(from,&rooms[i]);
+105:   }
+106:   from->visited=1;
+107: }
+108: static int is_active(Room *r) { return r->room==__atomic_load_n(&current_room,__ATOMIC_SEQ_CST); }
+109: static uint8_t mem_read(void *ctx, uint16_t address) {
+110:   Room *r=(Room*)ctx; return r->mem[address];
+111: }
+112: static void mem_write(void *ctx, uint16_t address, uint8_t value) {
+113:   Room *r=(Room*)ctx;
+114:   if(address>=0x4000) {
+115:     uint8_t before=r->mem[address];
+116:     if(is_active(r)) {
+117:       uint32_t index=__atomic_fetch_add(&debug_write_count,1,__ATOMIC_SEQ_CST);
+118:       DebugWrite *entry=&debug_writes[index % DEBUG_WRITE_CAPACITY];
+119:       entry->pc=Z_Z80_STATE_PC(&r->cpu.state);
+120:       entry->address=address;
+121:       entry->frame_cycle=(uint16_t)(r->frame_cycles + (int)r->cpu.cycles);
+122:       entry->before=before;
+123:       entry->after=value;
+124:     }
+125:     r->mem[address]=value;
+126:     if(address<0x5b00) r->dirty=1;
+127:   }
+128: }
+129: static uint8_t port_in(void *ctx, uint16_t address) {
+130:   Room *r=(Room*)ctx;
+131:   if(!is_active(r)) return 0xff;
+132:   uint8_t value=0xff;
+133:   for(int i=0;i<8;i++) if(!(address & (1u << (8+i)))) value &= key_matrix[i];
+134:   return value;
+135: }
+136: static void port_out(void *ctx, uint16_t address, uint8_t value) {
+137:   Room *r=(Room*)ctx;
+138:   if(is_active(r) && (address & 0xff)==0xfe) {
+139:     uint32_t cycle=(uint32_t)(r->frame_cycles + (int)r->cpu.cycles);
+140:     int index=__atomic_fetch_add(&audio_count,1,__ATOMIC_SEQ_CST);
+141:     if(index<4096) audio_events[index]=(cycle<<8) | value; else audio_overflow=1;
+142:     __atomic_store_n(&audio_last,value,__ATOMIC_SEQ_CST);
+143:   }
+144: }
+145: static uint32_t int_data(void *ctx) { (void)ctx; return 0xffff; }
+146: static void on_hook(void *ctx, uint16_t address) {
+147:   Room *r=(Room*)ctx;
+148:   uint8_t original=0;
+149:   uint16_t life_address=Z_Z80_STATE_HL(&r->cpu.state);
+150:   uint8_t life_before=r->mem[life_address];
+151:   int found=0;
+152:   for(int i=0;i<(int)(sizeof(hook_addresses)/sizeof(hook_addresses[0]));i++) {
+153:     if(hook_addresses[i]==address) { original=hook_opcodes[i]; found=1; break; }
+154:   }
+155:   if(!found) { Z_Z80_STATE_PC(&r->cpu.state)++; r->cpu.cycles+=4; return; }
+156:   r->mem[address]=original;
+157:   size_t old_cycles=r->cpu.cycles;
+158:   z80_run(&r->cpu,1);
+159:   r->cpu.cycles += old_cycles;
+160:   r->mem[address]=BREAKPOINT;
+161:   switch(address) {
+162:     case 0x672d:
+163:       if(is_active(r)) {
+164:         clone_all(r);
+165:         __atomic_store_n(&current_room,8,__ATOMIC_SEQ_CST);
+166:         /* TileMap centres the view on room 24 after starting. */
+167:       }
+168:       break;
+169:     case 0xa45f: {
+170:       uint16_t new_room=peek16(r,0xd2c8);
+171:       if(is_active(r) && new_room<ROOM_COUNT && new_room!=r->room) {
+172:         Room *next=&rooms[new_room];
+173:         r->visited=1;
+174:         /* Transfer the live CPU/RAM state, then pause this source CPU for the frame. */
+175:         clone_room_for_entry(r,next,new_room);
+176:         r->transitioned=1;
+177:         __atomic_store_n(&transition_room,(int)new_room,__ATOMIC_SEQ_CST);
+178:         __atomic_store_n(&transition_frame,__atomic_load_n(&active_frame_number,__ATOMIC_SEQ_CST),__ATOMIC_SEQ_CST);
+179:         __atomic_store_n(&current_room,new_room,__ATOMIC_SEQ_CST);
+180:       }
+181:       r->drawing=0;
+182:       poke16(r,0xd2c8,(uint16_t)r->room);
+183:       break;
+184:     }
+185:     case 0xa475:
+186:       r->drawing=1;
+187:       r->dirty=1;
+188:       break;
+189:     case 0xd9cb:
+190:     case 0xd9ce:
+191:       if(!is_active(r) && r->room!=199) ret_cpu(r);
+192:       break;
+193:     case 0xc747:
+194:       if(!is_active(r)) Z_Z80_STATE_PC(&r->cpu.state)++;
+195:       break;
+196:     case 0xc35e:
+197:       if(!is_active(r)) ret_cpu(r);
+198:       break;
+199:     case 0xcbdc:
+200:       if(!is_active(r)) Z_Z80_STATE_A(&r->cpu.state)=0;
+201:       break;
+202:     case 0xa774:
+203:       if(!is_active(r)) Z_Z80_STATE_PC(&r->cpu.state)=0xa759;
+204:       break;
+205:     case 0xc462:
+206:       /* DEC (HL) is Starquake's lives-decrement instruction. */
+207:       if(is_active(r) && life_before==1 && r->mem[life_address]==0) {
+208:         __atomic_store_n(&game_over,1,__ATOMIC_SEQ_CST);
+209:         r->cpu.cycles=r->run_budget;
+210:       }
+211:       break;
+212:   }
+213:   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) r->cpu.cycles=r->run_budget;
+214: }
+215: static void run_one_frame(Room *r) {
+216:   r->frame_cycles=0;
+217:   r->transitioned=0;
+218:   r->run_budget=CYCLES_BEFORE_INT;
+219:   r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
+220:   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
+221:   z80_int(&r->cpu,1);
+222:   r->run_budget=32;
+223:   r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
+224:   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
+225:   z80_int(&r->cpu,0);
+226:   r->frame_cycles-=FRAME_CYCLES;
+227: }
+228: /* SNA loader. ROM is the 16K Spectrum 48K ROM; SNA is the 27-byte header + 48K RAM. */
+229: int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, int cheats) {
+230:   if(!sna || sna_len!=49179 || !rom || rom_len<16384) return -1;
+231:   zero_bytes((uint8_t*)&snapshot_cpu,sizeof(snapshot_cpu));
+232:   snapshot_mem=(uint8_t*)0; /* no heap allocation; seed each room directly below */
+233:   uint8_t *base=base_mem; zero_bytes(base,65536);
+234:   copy_bytes(base,rom,16384);
+235:   copy_bytes(base+0x4000,sna+27,49152);
+236:   Z_Z80_STATE_I(&snapshot_cpu)=sna[0];
+237:   Z_Z80_STATE_HL_(&snapshot_cpu)=(uint16_t)(sna[1]|(sna[2]<<8));
+238:   Z_Z80_STATE_DE_(&snapshot_cpu)=(uint16_t)(sna[3]|(sna[4]<<8));
+239:   Z_Z80_STATE_BC_(&snapshot_cpu)=(uint16_t)(sna[5]|(sna[6]<<8));
+240:   Z_Z80_STATE_AF_(&snapshot_cpu)=(uint16_t)(sna[7]|(sna[8]<<8));
+241:   Z_Z80_STATE_HL(&snapshot_cpu)=(uint16_t)(sna[9]|(sna[10]<<8));
+242:   Z_Z80_STATE_DE(&snapshot_cpu)=(uint16_t)(sna[11]|(sna[12]<<8));
+243:   Z_Z80_STATE_BC(&snapshot_cpu)=(uint16_t)(sna[13]|(sna[14]<<8));
+244:   Z_Z80_STATE_IY(&snapshot_cpu)=(uint16_t)(sna[15]|(sna[16]<<8));
+245:   Z_Z80_STATE_IX(&snapshot_cpu)=(uint16_t)(sna[17]|(sna[18]<<8));
+246:   Z_Z80_STATE_IFF1(&snapshot_cpu)=(sna[19]&4)?1:0;
+247:   Z_Z80_STATE_IFF2(&snapshot_cpu)=Z_Z80_STATE_IFF1(&snapshot_cpu);
+248:   Z_Z80_STATE_EI(&snapshot_cpu)=Z_Z80_STATE_IFF2(&snapshot_cpu);
+249:   Z_Z80_STATE_R(&snapshot_cpu)=sna[20];
+250:   Z_Z80_STATE_AF(&snapshot_cpu)=(uint16_t)(sna[21]|(sna[22]<<8));
+251:   Z_Z80_STATE_SP(&snapshot_cpu)=(uint16_t)(sna[23]|(sna[24]<<8));
+252:   Z_Z80_STATE_IM(&snapshot_cpu)=sna[25]&3;
+253:   Z_Z80_STATE_PC(&snapshot_cpu)=(uint16_t)(base[Z_Z80_STATE_SP(&snapshot_cpu)] | (base[(uint16_t)(Z_Z80_STATE_SP(&snapshot_cpu)+1)]<<8));
+254:   Z_Z80_STATE_SP(&snapshot_cpu)=(uint16_t)(Z_Z80_STATE_SP(&snapshot_cpu)+2);
+255:   Z_Z80_STATE_IRQ(&snapshot_cpu)=0; Z_Z80_STATE_NMI(&snapshot_cpu)=0; Z_Z80_STATE_HALT(&snapshot_cpu)=0;
+256:   /* Starquake-specific patches used by Simon Owen's implementation. */
+257:   base[0x6024]=0x3e;
+258:   base[0xda33]=0x3e;
+259:   base[0xc561]=0x18;
+260:   base[0x5c78]=0x5a; base[0x5c79]=0xa5;
+261:   if(cheats) { base[0xc462]=0; base[0xd41f]=0xc9; base[0xce8e]=0x18; base[0xd735]=0; }
+262:   for(int i=0;i<(int)(sizeof(hook_addresses)/sizeof(hook_addresses[0]));i++) {
+263:     /* The infinite-lives cheat replaces DEC (HL) at 0xC462, so do not hook it. */
+264:     if(hook_addresses[i]==0xc462 && cheats) continue;
+265:     if(base[hook_addresses[i]]!=hook_opcodes[i]) return -2-(int)i;
+266:     base[hook_addresses[i]]=BREAKPOINT;
+267:   }
+268:   for(int i=0;i<ROOM_COUNT;i++) {
+269:     Room *r=&rooms[i];
+270:     copy_bytes(r->mem,base,65536);
+271:     z80_power(&r->cpu,1);
+272:     z80_reset(&r->cpu);
+273:     r->cpu.state=snapshot_cpu;
+274:     r->cpu.context=r;
+275:     r->cpu.read=mem_read; r->cpu.write=mem_write;
+276:     r->cpu.in=port_in; r->cpu.out=port_out; r->cpu.int_data=int_data;
+277:     r->cpu.halt=0; r->cpu.hook=on_hook;
+278:     r->room=i; r->drawing=1; r->running=1; r->dirty=1; r->frame_cycles=0; r->visited=0; r->lock=0;
+279:     r->cpu.cycles=0;
+280:   }
+281:   current_room=8; initialized=1; hook_error=0; __atomic_store_n(&game_over,0,__ATOMIC_SEQ_CST); active_frame_number=0; transition_frame=-1; transition_room=-1; audio_count=0; audio_last=0; debug_write_count=0;
+282:   for(int i=0;i<8;i++) key_matrix[i]=0xff;
+283:   return 0;
+284: }
+285: void emu_set_key_row(int row, int value) { if(row>=0 && row<8) key_matrix[row]=(uint8_t)value; }
+286: void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int frame_number, int background_divisor, int min_col, int max_col, int min_row, int max_row) {
+287:   if(!initialized || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
+288:   if(start_room<0) start_room=0;
+289:   if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
+290:   if(max_frames_per_room<1) max_frames_per_room=1;
+291:   if(max_frames_per_room>50) max_frames_per_room=50;
+292:   if(background_divisor<1) background_divisor=1;
+293:   __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
+294:   for(int i=start_room;i<end_room;i++) {
+295:     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
+296:     Room *r=&rooms[i];
+297:     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
+298:        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) continue;
+299:     int col=i%16, row=i/16;
+300:     int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
+301:     int active=is_active(r);
+302:     if(!active && !visible) continue;
+303:     lock_room(r);
+304:     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { unlock_room(r); return; }
+305:     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
+306:        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
+307:       unlock_room(r);
+308:       continue;
+309:     }
+310:     if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)))) {
+311:       int frames=max_frames_per_room;
+312:       for(int f=0;f<frames;f++) {
+313:         run_one_frame(r);
+314:         if(r->transitioned || r->drawing) break;
+315:       }
+316:     }
+317:     unlock_room(r);
+318:     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
+319:   }
+320: }
+321: void emu_tick(int max_frames_per_room) { emu_tick_range(0,ROOM_COUNT,max_frames_per_room,0,1,0,15,0,31); }
+322: void emu_begin_frame(void) { __atomic_store_n(&audio_count,0,__ATOMIC_SEQ_CST); audio_overflow=0; }
+323: int emu_current_room(void) { return current_room; }
+324: int emu_game_over(void) { return __atomic_load_n(&game_over,__ATOMIC_SEQ_CST); }
+325: int emu_room_dirty(int room) { return (room>=0&&room<ROOM_COUNT)?rooms[room].dirty:0; }
+326: void emu_clear_dirty(int room) { if(room>=0&&room<ROOM_COUNT) rooms[room].dirty=0; }
+327: int emu_take_dirty(int room) { if(room<0||room>=ROOM_COUNT) return 0; return __atomic_exchange_n(&rooms[room].dirty,0,__ATOMIC_SEQ_CST); }
+328: int emu_screen_ptr(int room) { if(room<0||room>=ROOM_COUNT) return 0; return (int)(uintptr_t)(rooms[room].mem+0x4000); }
+329: int emu_room_pc(int room) { return (room>=0&&room<ROOM_COUNT)?Z_Z80_STATE_PC(&rooms[room].cpu.state):0; }
+330: int emu_room_sp(int room) { return (room>=0&&room<ROOM_COUNT)?Z_Z80_STATE_SP(&rooms[room].cpu.state):0; }
+331: int emu_room_id(int room) { return (room>=0&&room<ROOM_COUNT)?rooms[room].room:-1; }
+332: int emu_audio_count(void) { return __atomic_load_n(&audio_count,__ATOMIC_SEQ_CST); }
+333: int emu_audio_ptr(void) { return (int)(uintptr_t)audio_events; }
+334: int emu_audio_overflowed(void) { return audio_overflow; }
+335: int emu_audio_last(void) { return __atomic_load_n(&audio_last,__ATOMIC_SEQ_CST); }
+336: int emu_is_initialized(void) { return initialized; }
+337: int emu_room_count(void) { return ROOM_COUNT; }
+338: /* Diagnostic exports: active-room RAM, CPU state and recent RAM writes. */
+339: int emu_debug_ram_ptr(void) { return (int)(uintptr_t)(rooms[current_room].mem+0x4000); }
+340: int emu_debug_pc(void) { return Z_Z80_STATE_PC(&rooms[current_room].cpu.state); }
+341: int emu_debug_sp(void) { return Z_Z80_STATE_SP(&rooms[current_room].cpu.state); }
+342: int emu_debug_write_ptr(void) { return (int)(uintptr_t)debug_writes; }
+343: int emu_debug_write_count(void) { return (int)__atomic_load_n(&debug_write_count,__ATOMIC_SEQ_CST); }
+344: int emu_debug_write_capacity(void) { return DEBUG_WRITE_CAPACITY; }
+345: void emu_debug_clear_writes(void) { __atomic_store_n(&debug_write_count,0,__ATOMIC_SEQ_CST); }
+346: void *memcpy(void *dst, const void *src, size_t n) { uint8_t *d=(uint8_t*)dst; const uint8_t *s=(const uint8_t*)src; for(size_t i=0;i<n;i++) d[i]=s[i]; return dst; }
+347: void *memset(void *dst, int v, size_t n) { uint8_t *d=(uint8_t*)dst; for(size_t i=0;i<n;i++) d[i]=(uint8_t)v; return dst; }
+</file>
+
+<file path="src/App.tsx">
+  1: import { PointerEvent, WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
+  2: import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
+  3: import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
+  4: const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
+  5:   ShiftLeft: { row: 0, bit: 0 }, ShiftRight: { row: 0, bit: 0 },
+  6:   KeyZ: { row: 0, bit: 1 }, KeyX: { row: 0, bit: 2 }, KeyC: { row: 0, bit: 3 }, KeyV: { row: 0, bit: 4 },
+  7:   KeyA: { row: 1, bit: 0 }, KeyS: { row: 1, bit: 1 }, KeyD: { row: 1, bit: 2 }, KeyF: { row: 1, bit: 3 }, KeyG: { row: 1, bit: 4 },
+  8:   KeyQ: { row: 2, bit: 0 }, KeyW: { row: 2, bit: 1 }, KeyE: { row: 2, bit: 2 }, KeyR: { row: 2, bit: 3 }, KeyT: { row: 2, bit: 4 },
+  9:   Digit1: { row: 3, bit: 0 }, Digit2: { row: 3, bit: 1 }, Digit3: { row: 3, bit: 2 }, Digit4: { row: 3, bit: 3 }, Digit5: { row: 3, bit: 4 },
+ 10:   Numpad1: { row: 3, bit: 0 }, Numpad2: { row: 3, bit: 1 }, Numpad3: { row: 3, bit: 2 }, Numpad4: { row: 3, bit: 3 }, Numpad5: { row: 3, bit: 4 },
+ 11:   Digit0: { row: 4, bit: 0 }, Digit9: { row: 4, bit: 1 }, Digit8: { row: 4, bit: 2 }, Digit7: { row: 4, bit: 3 }, Digit6: { row: 4, bit: 4 },
+ 12:   Numpad0: { row: 4, bit: 0 }, Numpad9: { row: 4, bit: 1 }, Numpad8: { row: 4, bit: 2 }, Numpad7: { row: 4, bit: 3 }, Numpad6: { row: 4, bit: 4 },
+ 13:   KeyP: { row: 5, bit: 0 }, KeyO: { row: 5, bit: 1 }, KeyI: { row: 5, bit: 2 }, KeyU: { row: 5, bit: 3 }, KeyY: { row: 5, bit: 4 },
+ 14:   Enter: { row: 6, bit: 0 }, NumpadEnter: { row: 6, bit: 0 }, KeyL: { row: 6, bit: 1 }, KeyK: { row: 6, bit: 2 }, KeyJ: { row: 6, bit: 3 }, KeyH: { row: 6, bit: 4 },
+ 15:   Space: { row: 7, bit: 0 }, KeyM: { row: 7, bit: 2 }, KeyN: { row: 7, bit: 3 }, KeyB: { row: 7, bit: 4 },
+ 16: };
+ 17: type WorkerMessage =
+ 18:   | { type: 'module-ready'; workerIndex: number; workerCount: number; shared: boolean; rangeStart: number; rangeEnd: number }
+ 19:   | { type: 'ready'; roomCount: number; currentRoom: number }
+ 20:   | { type: 'error'; message: string }
+ 21:   | { type: 'debug-error'; message: string }
+ 22:   | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeTraceAvailable: boolean; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
+ 23:   | { type: 'begin-done'; frameId: number }
+ 24:   | { type: 'tick-done'; frameId: number; workerIndex: number }
+ 25:   | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
+ 26: type Camera = { scale: number; x: number; y: number };
+ 27: type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean };
+ 28: const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
+ 29: type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
+ 30: type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
+ 31: const DEFAULT_CONTROLS: ControlBinding[] = [
+ 32:   { action: 'up', label: 'Up', code: 'KeyW', row: 2, bit: 0 },
+ 33:   { action: 'down', label: 'Down / platform', code: 'KeyS', row: 1, bit: 0 },
+ 34:   { action: 'left', label: 'Left', code: 'KeyA', row: 5, bit: 1 },
+ 35:   { action: 'right', label: 'Right', code: 'KeyD', row: 5, bit: 0 },
+ 36:   { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 2 },
+ 37: ];
+ 38: const ROOM_FOCUS_DURATION_MS = 1150;
+ 39: const DEFAULT_ZOOM_SCALE = 2.11;
+ 40: const BACKGROUND_DIVISOR = 2;
+ 41: const SPECTRUM_FRAME_CYCLES = 70000;
+ 42: const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
+ 43: function readControls(): ControlBinding[] {
+ 44:   try {
+ 45:     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
+ 46:     if (Array.isArray(saved)) return DEFAULT_CONTROLS.map(base => {
+ 47:       const match = saved.find((item: any) => item?.action === base.action && typeof item.code === 'string');
+ 48:       return match ? { ...base, code: match.code } : base;
+ 49:     });
+ 50:   } catch { /* Use defaults when saved settings are unavailable. */ }
+ 51:   return DEFAULT_CONTROLS.map(control => ({ ...control }));
+ 52: }
+ 53: function formatControlKey(code: string) {
+ 54:   if (!code) return '—';
+ 55:   if (code === 'Space') return 'SPACE';
+ 56:   if (code.startsWith('Key')) return code.slice(3).toUpperCase();
+ 57:   if (code.startsWith('Digit')) return code.slice(5);
+ 58:   if (code.startsWith('Numpad')) return 'NUM ' + code.slice(6);
+ 59:   const names: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: 'ENTER', Escape: 'ESC', ShiftLeft: 'LEFT SHIFT', ShiftRight: 'RIGHT SHIFT' };
+ 60:   return names[code] || code.toUpperCase();
+ 61: }
+ 62: export default function App() {
+ 63:   const viewportRef = useRef<HTMLDivElement>(null);
+ 64:   const mapCanvasRef = useRef<HTMLCanvasElement>(null);
+ 65:   const overlayRef = useRef<HTMLCanvasElement>(null);
+ 66:   const hudCanvasRef = useRef<HTMLCanvasElement>(null);
+ 67:   const workersRef = useRef<Worker[]>([]);
+ 68:   const poolReadyRef = useRef(false);
+ 69:   const moduleReadyRef = useRef(new Set<number>());
+ 70:   const cameraRef = useRef<Camera>({ scale: DEFAULT_ZOOM_SCALE, x: 0, y: 0 });
+ 71:   const dragRef = useRef<{ x: number; y: number; cameraX: number; cameraY: number } | null>(null);
+ 72:   const keyRowsRef = useRef<number[]>([...INITIAL_KEYS]);
+ 73:   const pressedCodesRef = useRef(new Set<string>());
+ 74:   const captureActionRef = useRef<GameAction | null>(null);
+ 75:   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
+ 76:   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
+ 77:   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
+ 78:   const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
+ 79:   const frameStateRef = useRef<FrameState | null>(null);
+ 80:   const frameIdRef = useRef(0);
+ 81:   /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
+ 82:   const forceRoomRef = useRef(-1);
+ 83:   const currentRoomRef = useRef(8);
+ 84:   const screenCacheRef = useRef<(Uint8Array | null)[]>(Array(512).fill(null));
+ 85:   const lastFlashPhaseRef = useRef(false);
+ 86:   const frameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 87:   const initialPreviewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+ 88:   const hasAutoPreviewedRef = useRef(false);
+ 89:   const playingRef = useRef(false);
+ 90:   const hasStartedRef = useRef(false);
+ 91:   const soundOnRef = useRef(true);
+ 92:   const [camera, setCamera] = useState<Camera>(cameraRef.current);
+ 93:   const worldRef = useRef<HTMLDivElement>(null);
+ 94:   const cameraAnimationRef = useRef<number | null>(null);
+ 95:   const [status, setStatus] = useState('Preparing browser emulator…');
+ 96:   const [error, setError] = useState('');
+ 97:   const [ready, setReady] = useState(false);
+ 98:   const [restarting, setRestarting] = useState(false);
+ 99:   const [poolReady, setPoolReady] = useState(false);
+100:   const [playing, setPlaying] = useState(false);
+101:   const [gameOver, setGameOver] = useState(false);
+102:   const [currentRoom, setCurrentRoom] = useState(8);
+103:   const [visitedVersion, setVisitedVersion] = useState(0);
+104:   const [debugCapturePending, setDebugCapturePending] = useState(false);
+105:   const [soundOn, setSoundOn] = useState(true);
+106:   const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
+107:   const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
+108:   const [controls, setControls] = useState<ControlBinding[]>(readControls);
+109:   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
+110:   const controlsRef = useRef(controls);
+111:   controlsRef.current = controls;
+112:   soundOnRef.current = soundOn;
+113:   const applyCamera = useCallback((next: Camera) => {
+114:     if (cameraAnimationRef.current !== null) {
+115:       cancelAnimationFrame(cameraAnimationRef.current);
+116:       cameraAnimationRef.current = null;
+117:     }
+118:     cameraRef.current = next;
+119:     setCamera(next);
+120:   }, []);
+121:   const fitMap = useCallback(() => {
+122:     const viewport = viewportRef.current;
+123:     if (!viewport) return;
+124:     const scale = Math.min(viewport.clientWidth / MAP_WIDTH, viewport.clientHeight / MAP_HEIGHT);
+125:     applyCamera({ scale, x: (viewport.clientWidth - MAP_WIDTH * scale) / 2, y: (viewport.clientHeight - MAP_HEIGHT * scale) / 2 });
+126:   }, [applyCamera]);
+127:   const focusRoom = useCallback((room?: number) => {
+128:     const targetRoom = room ?? currentRoomRef.current;
+129:     const viewport = viewportRef.current;
+130:     if (!viewport) return;
+131:     const scale = DEFAULT_ZOOM_SCALE;
+132:     applyCamera({ scale, x: (viewport.clientWidth - 256 * scale) / 2 - (targetRoom % 16) * 256 * scale, y: (viewport.clientHeight - 144 * scale) / 2 - Math.floor(targetRoom / 16) * 144 * scale });
+133:   }, [applyCamera]);
+134:   const centerRoomKeepZoom = useCallback((room: number) => {
+135:     const viewport = viewportRef.current;
+136:     if (!viewport) return;
+137:     if (cameraAnimationRef.current !== null) cancelAnimationFrame(cameraAnimationRef.current);
+138:     const start = cameraRef.current;
+139:     const roomCenterX = (room % 16) * 256 + 128;
+140:     const roomCenterY = Math.floor(room / 16) * 144 + 72;
+141:     const targetX = viewport.clientWidth / 2 - roomCenterX * start.scale;
+142:     const targetY = viewport.clientHeight / 2 - roomCenterY * start.scale;
+143:     const startedAt = performance.now();
+144:     const animate = (now: number) => {
+145:       const progress = Math.min(1, (now - startedAt) / ROOM_FOCUS_DURATION_MS);
+146:       const eased = progress * progress * (3 - 2 * progress);
+147:       const next = { ...start, x: start.x + (targetX - start.x) * eased, y: start.y + (targetY - start.y) * eased };
+148:       cameraRef.current = next;
+149:       if (worldRef.current) worldRef.current.style.transform = `translate3d(${next.x}px, ${next.y}px, 0) scale(${next.scale})`;
+150:       if (progress < 1) cameraAnimationRef.current = requestAnimationFrame(animate);
+151:       else {
+152:         cameraAnimationRef.current = null;
+153:         cameraRef.current = { ...start, x: targetX, y: targetY };
+154:         setCamera(cameraRef.current);
+155:       }
+156:     };
+157:     cameraAnimationRef.current = requestAnimationFrame(animate);
+158:   }, []);
+159:   useEffect(() => {
+160:     try { localStorage.setItem(CONTROL_STORAGE_KEY, JSON.stringify(controls)); } catch { /* Storage may be unavailable. */ }
+161:   }, [controls]);
+162:   /* The game now starts running on load. Browsers keep audio blocked until the
+163:      first user gesture, so unlock it on the first click or key press. */
+164:   useEffect(() => {
+165:     const unlock = () => {
+166:       window.removeEventListener('pointerdown', unlock);
+167:       window.removeEventListener('keydown', unlock);
+168:       if (playingRef.current && soundOnRef.current) startAudio();
+169:     };
+170:     window.addEventListener('pointerdown', unlock);
+171:     window.addEventListener('keydown', unlock);
+172:     return () => {
+173:       window.removeEventListener('pointerdown', unlock);
+174:       window.removeEventListener('keydown', unlock);
+175:     };
+176:   }, []);
+177:   function startAudio() {
+178:     const existing = audioRef.current.context;
+179:     if (existing) { void existing.resume(); return; }
+180:     const context = new AudioContext();
+181:     audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+182:     void context.resume();
+183:   }
+184:   function stopAudio() {
+185:     const context = audioRef.current.context;
+186:     if (context) void context.close();
+187:     audioRef.current = { context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+188:   }
+189:   function playBeeper(events: Uint32Array, last: number) {
+190:     const audio = audioRef.current;
+191:     const context = audio.context;
+192:     if (!context) return;
+193:     // A room can need several emulated CPU frames to finish drawing. The
+194:     // cycle counter restarts for each one, so unwrap those timestamps here.
+195:     const eventCycles = new Float64Array(events.length);
+196:     let cycleOffset = 0;
+197:     let previousCycle = -1;
+198:     for (let i = 0; i < events.length; i++) {
+199:       const cycle = events[i] >>> 8;
+200:       if (previousCycle >= 0 && cycle + SPECTRUM_FRAME_CYCLES / 2 < previousCycle) {
+201:         cycleOffset += SPECTRUM_FRAME_CYCLES;
+202:       }
+203:       eventCycles[i] = cycle + cycleOffset;
+204:       previousCycle = cycle;
+205:     }
+206:     const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
+207:     const sampleRate = context.sampleRate;
+208:     const sampleCount = Math.max(1, Math.round(sampleRate * totalCycles / 3500000));
+209:     const frameDuration = sampleCount / sampleRate;
+210:     const buffer = context.createBuffer(1, sampleCount, sampleRate);
+211:     const samples = buffer.getChannelData(0);
+212:     let level = audio.lastLevel;
+213:     let eventIndex = 0;
+214:     let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
+215:     const sampleCycles = totalCycles / sampleCount;
+216:     const lowPassCoefficient = 1 - Math.exp(-2 * Math.PI * 4800 / sampleRate);
+217:     const highPassCoefficient = Math.exp(-2 * Math.PI * 35 / sampleRate);
+218:     let lowPass = audio.lowPass;
+219:     let previousInput = audio.previousInput;
+220:     let highPass = audio.highPass;
+221:     for (let sample = 0; sample < sampleCount; sample++) {
+222:       const sampleStart = sample * sampleCycles;
+223:       const sampleEnd = (sample + 1) * sampleCycles;
+224:       while (eventIndex < events.length && nextCycle <= sampleStart) {
+225:         level = (events[eventIndex] & 0x10) !== 0;
+226:         eventIndex++;
+227:         nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
+228:       }
+229:       let cursor = sampleStart;
+230:       let area = 0;
+231:       while (eventIndex < events.length && nextCycle < sampleEnd) {
+232:         area += (nextCycle - cursor) * (level ? 1 : -1);
+233:         cursor = nextCycle;
+234:         level = (events[eventIndex] & 0x10) !== 0;
+235:         eventIndex++;
+236:         nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
+237:       }
+238:       area += (sampleEnd - cursor) * (level ? 1 : -1);
+239:       const input = (area / sampleCycles) * 0.14;
+240:       lowPass += lowPassCoefficient * (input - lowPass);
+241:       highPass = lowPass - previousInput + highPassCoefficient * highPass;
+242:       previousInput = lowPass;
+243:       samples[sample] = highPass;
+244:     }
+245:     audio.lastLevel = (last & 0x10) !== 0;
+246:     audio.lowPass = lowPass;
+247:     audio.previousInput = previousInput;
+248:     audio.highPass = highPass;
+249:     const source = context.createBufferSource();
+250:     source.buffer = buffer;
+251:     source.connect(context.destination);
+252:     const startAt = Math.max(context.currentTime + 0.004, audio.nextTime);
+253:     source.start(startAt);
+254:     audio.nextTime = startAt + frameDuration;
+255:     source.onended = () => source.disconnect();
+256:   }
+257:   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
+258:     const canvas = mapCanvasRef.current;
+259:     const ctx = canvas?.getContext('2d', { alpha: false });
+260:     const previousRoom = currentRoomRef.current;
+261:     /* On the frame a transition happens, the entered room's screen is still a stale
+262:        copy of the room just left (its enemies and the player included). Do not paint
+263:        it; the next frame always carries the entered room's real screen. */
+264:     let staleRoom = -1;
+265:     if (message.currentRoom !== previousRoom) {
+266:       staleRoom = message.currentRoom;
+267:       forceRoomRef.current = message.currentRoom;
+268:       if (hasStartedRef.current) {
+269:         if (!visitedRoomsRef.current[previousRoom]) {
+270:           visitedRoomsRef.current[previousRoom] = true;
+271:           visitedAtRef.current[previousRoom] = performance.now();
+272:           setVisitedVersion(version => version + 1);
+273:         }
+274:         /* A first visit must not briefly display the room we just left. */
+275:         if (!visitedRoomsRef.current[message.currentRoom]) {
+276:           screenCacheRef.current[message.currentRoom] = null;
+277:           flashRoomsRef.current[message.currentRoom] = false;
+278:           if (ctx) {
+279:             ctx.fillStyle = '#05080d';
+280:             ctx.fillRect((message.currentRoom % 16) * 256, Math.floor(message.currentRoom / 16) * 144, 256, 144);
+281:           }
+282:         }
+283:       }
+284:       currentRoomRef.current = message.currentRoom;
+285:       setCurrentRoom(message.currentRoom);
+286:       centerRoomKeepZoom(message.currentRoom);
+287:     }
+288:     if (ctx) {
+289:       const flashPhase = ((Math.floor(performance.now() / 320) & 1) === 1);
+290:       for (const item of message.dirty) {
+291:         if (item.room === staleRoom) continue;
+292:         const screen = new Uint8Array(item.screen);
+293:         screenCacheRef.current[item.room] = screen;
+294:         flashRoomsRef.current[item.room] = spectrumScreenHasFlash(screen);
+295:       }
+296:       if (flashPhase !== lastFlashPhaseRef.current) {
+297:         for (let room = 0; room < screenCacheRef.current.length; room++) {
+298:           const screen = screenCacheRef.current[room];
+299:           if (screen && flashRoomsRef.current[room]) paintSpectrumRoom(ctx, room, screen, flashPhase);
+300:         }
+301:         lastFlashPhaseRef.current = flashPhase;
+302:       } else {
+303:         for (const item of message.dirty) {
+304:           if (item.room === staleRoom) continue;
+305:           const screen = screenCacheRef.current[item.room];
+306:           if (screen) paintSpectrumRoom(ctx, item.room, screen, flashPhase);
+307:         }
+308:       }
+309:     }
+310:     const hud = hudCanvasRef.current?.getContext('2d');
+311:     const activeScreen = screenCacheRef.current[message.currentRoom];
+312:     if (hud) {
+313:       if (activeScreen && staleRoom < 0) paintSpectrumHud(hud, activeScreen);
+314:       else if (staleRoom < 0) hud.clearRect(0, 0, 256, 48); /* keep the previous HUD for the transition frame */
+315:     }
+316:     if (staleRoom < 0 && forceRoomRef.current >= 0) forceRoomRef.current = -1;
+317:     if (message.gameOver) {
+318:       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+319:       initialPreviewTimerRef.current = null;
+320:       if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+321:       frameTimerRef.current = null;
+322:       playingRef.current = false;
+323:       setPlaying(false);
+324:       setGameOver(true);
+325:       setStatus('Game over · all lives lost');
+326:     }
+327:     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
+328:   }, [centerRoomKeepZoom]);
+329:   const beginFrame = useCallback(() => {
+330:     const workers = workersRef.current;
+331:     if (!playingRef.current || !workers.length || frameStateRef.current) return;
+332:     const id = ++frameIdRef.current;
+333:     frameStateRef.current = { id, phase: 'begin', started: performance.now(), tickDone: new Set(), collectDone: new Set(), dirty: [], audioEvents: new Uint32Array(0), audioLast: 0, currentRoom: currentRoomRef.current, gameOver: false };
+334:     workers[0].postMessage({ type: 'begin', frameId: id });
+335:   }, []);
+336:   const handleWorkerMessage = useCallback((message: WorkerMessage) => {
+337:     if (message.type === 'debug-error') {
+338:       setDebugCapturePending(false);
+339:       setError(message.message);
+340:       return;
+341:     }
+342:     if (message.type === 'debug-captured') {
+343:       const ram = new Uint8Array(message.ram);
+344:       const writeBytes = new Uint8Array(message.writes);
+345:       const view = new DataView(writeBytes.buffer, writeBytes.byteOffset, writeBytes.byteLength);
+346:       const writes = Array.from({ length: Math.floor(writeBytes.byteLength / 8) }, (_, index) => {
+347:         const offset = index * 8;
+348:         return {
+349:           pc: view.getUint16(offset, true),
+350:           address: view.getUint16(offset + 2, true),
+351:           frameCycle: view.getUint16(offset + 4, true),
+352:           before: view.getUint8(offset + 6),
+353:           after: view.getUint8(offset + 7),
+354:         };
+355:       });
+356:       const diagnostic = {
+357:         format: 'Starquake emulator diagnostic v1',
+358:         capturedAt: message.capturedAt,
+359:         room: message.room,
+360:         pc: message.pc,
+361:         sp: message.sp,
+362:         ramStart: '0x4000',
+363:         ramEnd: '0xffff',
+364:         ramHex: Array.from(ram, value => value.toString(16).padStart(2, '0')).join(''),
+365:         writeTraceAvailable: message.writeTraceAvailable,
+366:         writeCountSincePreviousCapture: message.writeCount,
+367:         writeLogTruncated: message.writeCount > message.writeCapacity,
+368:         writes,
+369:       };
+370:       const blob = new Blob([JSON.stringify(diagnostic, null, 2)], { type: 'application/json' });
+371:       const url = URL.createObjectURL(blob);
+372:       const anchor = document.createElement('a');
+373:       anchor.href = url;
+374:       anchor.download = `starquake-diagnostic-room-${message.room}-${message.captureId}.json`;
+375:       anchor.click();
+376:       URL.revokeObjectURL(url);
+377:       setDebugCapturePending(false);
+378:       setStatus(`Diagnostic captured · room ${message.room}`);
+379:       return;
+380:     }
+381:     if (message.type === 'error') {
+382:       setDebugCapturePending(false); setError(message.message); setStatus('Emulator error'); playingRef.current = false; setPlaying(false); frameStateRef.current = null; return;
+383:     }
+384:     if (message.type === 'module-ready') {
+385:       moduleReadyRef.current.add(message.workerIndex);
+386:       if (moduleReadyRef.current.size === message.workerCount) {
+387:         poolReadyRef.current = true; setPoolReady(true);
+388:         setStatus(message.shared ? `Ready · ${message.workerCount} parallel WebAssembly workers` : 'Ready · single-worker compatibility mode');
+389:       }
+390:       return;
+391:     }
+392:     if (message.type === 'ready') {
+393:       setReady(true); setGameOver(false); setRestarting(false); currentRoomRef.current = message.currentRoom; setCurrentRoom(message.currentRoom); hasStartedRef.current = false; visitedRoomsRef.current.fill(false); visitedAtRef.current.fill(0); screenCacheRef.current.fill(null); flashRoomsRef.current.fill(false); setVisitedVersion(version => version + 1);
+394:       const map = mapCanvasRef.current?.getContext('2d');
+395:       if (map) { map.fillStyle = '#05080d'; map.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
+396:       const hud = hudCanvasRef.current?.getContext('2d');
+397:       if (hud) hud.clearRect(0, 0, 256, 48);
+398:       setStatus('Emulator initialised. Showing startup graphics…');
+399:       requestAnimationFrame(() => {
+400:         const viewport = viewportRef.current;
+401:         if (viewport) {
+402:           const scale = DEFAULT_ZOOM_SCALE;
+403:           const room = message.currentRoom;
+404:           const roomCenterX = (room % 16) * 256 + 128;
+405:           const roomCenterY = Math.floor(room / 16) * 144 + 72;
+406:           applyCamera({ scale, x: viewport.clientWidth / 2 - roomCenterX * scale, y: viewport.clientHeight / 2 - roomCenterY * scale });
+407:         }
+408:         if (!hasAutoPreviewedRef.current) {
+409:           hasAutoPreviewedRef.current = true;
+410:           hasStartedRef.current = true;
+411:           playingRef.current = true;
+412:           setPlaying(true);
+413:           setStatus('Running');
+414:           beginFrame();
+415:         }
+416:       });
+417:       return;
+418:     }
+419:     const frame = frameStateRef.current;
+420:     if (!frame || message.frameId !== frame.id) return;
+421:     const workers = workersRef.current;
+422:     if (message.type === 'begin-done' && frame.phase === 'begin') {
+423:       frame.phase = 'tick';
+424:       const viewport = viewportRef.current;
+425:       const c = cameraRef.current;
+426:       const left = viewport ? (0 - c.x) / c.scale : 0;
+427:       const top = viewport ? (0 - c.y) / c.scale : 0;
+428:       const right = viewport ? (viewport.clientWidth - c.x) / c.scale : MAP_WIDTH;
+429:       const bottom = viewport ? (viewport.clientHeight - c.y) / c.scale : MAP_HEIGHT;
+430:       const minCol = Math.max(0, Math.floor(left / 256));
+431:       const maxCol = Math.min(15, Math.ceil(right / 256) - 1);
+432:       const minRow = Math.max(0, Math.floor(top / 144));
+433:       const maxRow = Math.min(31, Math.ceil(bottom / 144) - 1);
+434:       for (const worker of workers) worker.postMessage({ type: 'tick', frameId: frame.id, backgroundDivisor: BACKGROUND_DIVISOR, minCol, maxCol, minRow, maxRow });
+435:     } else if (message.type === 'tick-done' && frame.phase === 'tick') {
+436:       frame.tickDone.add(message.workerIndex);
+437:       if (frame.tickDone.size === workers.length) {
+438:         frame.phase = 'collect';
+439:         for (const worker of workers) worker.postMessage({ type: 'collect', frameId: frame.id, forceRoom: forceRoomRef.current });
+440:       }
+441:     } else if (message.type === 'collected' && frame.phase === 'collect') {
+442:       frame.collectDone.add(message.workerIndex);
+443:       frame.dirty.push(...message.dirty);
+444:       if (message.workerIndex === 0) { frame.audioEvents = message.audioEvents; frame.audioLast = message.audioLast; }
+445:       frame.currentRoom = message.currentRoom;
+446:       frame.gameOver = frame.gameOver || message.gameOver;
+447:       if (frame.collectDone.size === workers.length) {
+448:         const elapsed = performance.now() - frame.started;
+449:         drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
+450:         frameStateRef.current = null;
+451:         if (playingRef.current) {
+452:           const delay = Math.max(0, 20 - elapsed);
+453:           frameTimerRef.current = setTimeout(beginFrame, delay);
+454:         }
+455:       }
+456:     }
+457:   }, [beginFrame, drawFrame, fitMap, applyCamera]);
+458:   useEffect(() => {
+459:     moduleReadyRef.current.clear(); poolReadyRef.current = false; setPoolReady(false);
+460:     const shared = window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
+461:     const count = shared ? Math.max(2, Math.min(8, navigator.hardwareConcurrency || 4)) : 1;
+462:     const memory = shared ? new WebAssembly.Memory({ initial: 1024, maximum: 2048, shared: true }) : undefined;
+463:     const workers = Array.from({ length: count }, () => new Worker(new URL('./emu/emu.worker.ts', import.meta.url), { type: 'module' }));
+464:     workersRef.current = workers;
+465:     workers.forEach((worker, index) => {
+466:       worker.onmessage = (event: MessageEvent<WorkerMessage>) => handleWorkerMessage(event.data);
+467:       worker.onerror = event => setError(event.message || 'Emulation worker failed');
+468:       worker.postMessage({ type: 'module', memory, shared, workerIndex: index, workerCount: count });
+469:     });
+470:     if (!shared) setStatus('Loading Z80 emulator · single-worker mode (enable cross-origin isolation for parallel emulation)');
+471:     return () => {
+472:       if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+473:       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+474:       workers.forEach(worker => { worker.postMessage({ type: 'stop' }); worker.terminate(); });
+475:       if (cameraAnimationRef.current !== null) cancelAnimationFrame(cameraAnimationRef.current);
+476:       workersRef.current = []; stopAudio();
+477:     };
+478:   }, [handleWorkerMessage]);
+479:   useEffect(() => {
+480:     if (!poolReady) return;
+481:     let cancelled = false;
+482:     const loadBundledAssets = async () => {
+483:       try {
+484:         setStatus('Loading bundled Starquake snapshot and Spectrum ROM…');
+485:         const base = import.meta.env.BASE_URL;
+486:         const [snapshotResponse, romResponse] = await Promise.all([
+487:           fetch(`${base}starquake.sna`),
+488:           fetch(`${base}48.rom`),
+489:         ]);
+490:         if (!snapshotResponse.ok) throw new Error(`Could not load bundled snapshot (${snapshotResponse.status}).`);
+491:         if (!romResponse.ok) throw new Error(`Could not load bundled Spectrum ROM (${romResponse.status}).`);
+492:         const [snapshot, rom] = await Promise.all([snapshotResponse.arrayBuffer(), romResponse.arrayBuffer()]);
+493:         if (snapshot.byteLength !== 49179) throw new Error(`Bundled snapshot must be 49,179 bytes; got ${snapshot.byteLength}.`);
+494:         if (rom.byteLength < 16384) throw new Error(`Bundled Spectrum ROM must contain at least 16,384 bytes; got ${rom.byteLength}.`);
+495:         if (cancelled) return;
+496:         setStatus('Initialising all 512 room states…');
+497:         workersRef.current[0].postMessage({ type: 'init', snapshot, rom, cheats: false }, [snapshot, rom]);
+498:       } catch (cause) {
+499:         if (!cancelled) {
+500:           setError(cause instanceof Error ? cause.message : String(cause));
+501:           setStatus('Could not load bundled game files');
+502:         }
+503:       }
+504:     };
+505:     loadBundledAssets();
+506:     return () => { cancelled = true; };
+507:   }, [poolReady]);
+508:   useEffect(() => {
+509:     const canvas = mapCanvasRef.current;
+510:     const overlay = overlayRef.current;
+511:     if (canvas && overlay) {
+512:       canvas.width = MAP_WIDTH; canvas.height = MAP_HEIGHT;
+513:       overlay.width = MAP_WIDTH; overlay.height = MAP_HEIGHT;
+514:       if (hudCanvasRef.current) { hudCanvasRef.current.width = 256; hudCanvasRef.current.height = 48; }
+515:       const ctx = canvas.getContext('2d');
+516:       if (ctx) { ctx.fillStyle = '#05080d'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
+517:     }
+518:     fitMap();
+519:     const observer = new ResizeObserver(() => fitMap());
+520:     if (viewportRef.current) observer.observe(viewportRef.current);
+521:     return () => observer.disconnect();
+522:   }, [fitMap]);
+523:   useEffect(() => {
+524:     const overlay = overlayRef.current;
+525:     const ctx = overlay?.getContext('2d');
+526:     if (!ctx) return;
+527:     const fadeDuration = 900;
+528:     let animation = 0;
+529:     const draw = () => {
+530:       ctx.clearRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+531:       const now = performance.now();
+532:       let fading = false;
+533:       for (let room = 0; room < 512; room++) {
+534:         if (!visitedRoomsRef.current[room] || room === currentRoom) continue;
+535:         const started = visitedAtRef.current[room] || now;
+536:         const progress = Math.min(1, Math.max(0, (now - started) / fadeDuration));
+537:         if (progress < 1) fading = true;
+538:         ctx.fillStyle = `rgba(190,200,215,${0.10 * progress})`;
+539:         ctx.fillRect((room % 16) * 256, Math.floor(room / 16) * 144, 256, 144);
+540:       }
+541:       if (fading) animation = requestAnimationFrame(draw);
+542:     };
+543:     draw();
+544:     return () => cancelAnimationFrame(animation);
+545:   }, [currentRoom, visitedVersion]);
+546:   useEffect(() => {
+547:     const publishKeys = () => {
+548:       const rows = [...INITIAL_KEYS];
+549:       for (const code of pressedCodesRef.current) {
+550:         const binding = controlsRef.current.find(item => item.code && item.code === code);
+551:         const nativePosition = SPECTRUM_KEY_POSITIONS[code];
+552:         const positions = keyboardModeRef.current === 'spectrum'
+553:           ? [nativePosition].filter((position): position is { row: number; bit: number } => Boolean(position))
+554:           : binding ? [binding] : [nativePosition].filter((position): position is { row: number; bit: number } => Boolean(position));
+555:         for (const position of positions) rows[position.row] &= ~(1 << position.bit);
+556:       }
+557:       keyRowsRef.current = rows;
+558:       workersRef.current[0]?.postMessage({ type: 'keys', rows });
+559:     };
+560:     const onKey = (event: KeyboardEvent) => {
+561:       const pending = captureActionRef.current;
+562:       if (pending) {
+563:         event.preventDefault();
+564:         event.stopPropagation();
+565:         if (event.code === 'Escape') {
+566:           captureActionRef.current = null;
+567:           setCapturingAction(null);
+568:           return;
+569:         }
+570:         if (['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(event.code)) return;
+571:         setControls(current => current.map(binding => {
+572:           if (binding.action === pending) return { ...binding, code: event.code };
+573:           if (binding.code === event.code) return { ...binding, code: '' };
+574:           return binding;
+575:         }));
+576:         captureActionRef.current = null;
+577:         setCapturingAction(null);
+578:         pressedCodesRef.current.clear();
+579:         publishKeys();
+580:         return;
+581:       }
+582:       if (event.code === 'Tab') {
+583:         event.preventDefault();
+584:         event.stopPropagation();
+585:         const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
+586:         keyboardModeRef.current = next;
+587:         setKeyboardMode(next);
+588:         pressedCodesRef.current.clear();
+589:         keyRowsRef.current = [...INITIAL_KEYS];
+590:         workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+591:         return;
+592:       }
+593:       const binding = controlsRef.current.find(item => item.code && item.code === event.code);
+594:       if (keyboardModeRef.current === 'spectrum' ? Boolean(SPECTRUM_KEY_POSITIONS[event.code]) : Boolean(binding || SPECTRUM_KEY_POSITIONS[event.code])) {
+595:         event.preventDefault();
+596:         if (!event.repeat || !pressedCodesRef.current.has(event.code)) {
+597:           pressedCodesRef.current.add(event.code);
+598:           publishKeys();
+599:         }
+600:         return;
+601:       }
+602:       if (event.repeat) return;
+603:       const key = event.key.toLowerCase();
+604:       if (key === 'home') { event.preventDefault(); focusRoom(); }
+605:       if (key === 'end') { event.preventDefault(); fitMap(); }
+606:       if (key === '+' || key === '=') zoomAtCentre(1.25);
+607:       if (key === '-' || key === '_') zoomAtCentre(0.8);
+608:       if (key.startsWith('arrow')) {
+609:         event.preventDefault();
+610:         const step = event.shiftKey ? 10 : 80;
+611:         const c = cameraRef.current;
+612:         applyCamera({ ...c, x: c.x + (key === 'arrowleft' ? step : key === 'arrowright' ? -step : 0), y: c.y + (key === 'arrowup' ? step : key === 'arrowdown' ? -step : 0) });
+613:       }
+614:     };
+615:     const onKeyUp = (event: KeyboardEvent) => {
+616:       if (captureActionRef.current) return;
+617:       if (pressedCodesRef.current.delete(event.code)) publishKeys();
+618:     };
+619:     const clearPressed = () => {
+620:       if (pressedCodesRef.current.size) {
+621:         pressedCodesRef.current.clear();
+622:         publishKeys();
+623:       }
+624:     };
+625:     window.addEventListener('keydown', onKey, true);
+626:     window.addEventListener('keyup', onKeyUp, true);
+627:     window.addEventListener('blur', clearPressed);
+628:     return () => {
+629:       window.removeEventListener('keydown', onKey, true);
+630:       window.removeEventListener('keyup', onKeyUp, true);
+631:       window.removeEventListener('blur', clearPressed);
+632:     };
+633:   }, [applyCamera, fitMap, focusRoom]);
+634:   const zoomAt = (x: number, y: number, factor: number) => {
+635:     const c = cameraRef.current; const scale = Math.max(0.025, Math.min(8, c.scale * factor));
+636:     const wx = (x - c.x) / c.scale, wy = (y - c.y) / c.scale;
+637:     applyCamera({ scale, x: x - wx * scale, y: y - wy * scale });
+638:   };
+639:   const zoomAtCentre = (factor: number) => {
+640:     const viewport = viewportRef.current; if (!viewport) return;
+641:     zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, factor);
+642:   };
+643:   const onWheel = (event: WheelEvent<HTMLDivElement>) => {
+644:     event.preventDefault(); const rect = viewportRef.current!.getBoundingClientRect();
+645:     zoomAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.2 : 1 / 1.2);
+646:   };
+647:   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+648:     if (event.button !== 0) return;
+649:     dragRef.current = { x: event.clientX, y: event.clientY, cameraX: cameraRef.current.x, cameraY: cameraRef.current.y };
+650:     event.currentTarget.setPointerCapture(event.pointerId);
+651:   };
+652:   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+653:     if (!dragRef.current) return; const d = dragRef.current;
+654:     applyCamera({ ...cameraRef.current, x: d.cameraX + event.clientX - d.x, y: d.cameraY + event.clientY - d.y });
+655:   };
+656:   const onPointerUp = () => { dragRef.current = null; };
+657:   const toggleKeyboardMode = () => {
+658:     const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
+659:     keyboardModeRef.current = next;
+660:     setKeyboardMode(next);
+661:     pressedCodesRef.current.clear();
+662:     keyRowsRef.current = [...INITIAL_KEYS];
+663:     workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
+664:   };
+665:   const togglePlay = () => {
+666:     if (!ready || gameOver || restarting) return;
+667:     if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+668:     initialPreviewTimerRef.current = null;
+669:     if (playingRef.current) {
+670:       playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
+671:     } else {
+672:       if (!hasStartedRef.current) {
+673:         visitedRoomsRef.current.fill(false);
+674:         visitedAtRef.current.fill(0);
+675:         setVisitedVersion(version => version + 1);
+676:         hasStartedRef.current = true;
+677:       }
+678:       playingRef.current = true; setPlaying(true); if (soundOnRef.current) startAudio(); setStatus('Running'); beginFrame();
+679:     }
+680:   };
+681:   const restartGame = async () => {
+682:     if (!ready || restarting) return;
+683:     playingRef.current = false;
+684:     setPlaying(false);
+685:     if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
+686:     if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
+687:     initialPreviewTimerRef.current = null;
+688:     frameStateRef.current = null;
+689:     setReady(false);
+690:     setRestarting(true);
+691:     setError('');
+692:     setStatus('Restarting Starquake…');
+693:     try {
+694:       const base = import.meta.env.BASE_URL;
+695:       const [snapshotResponse, romResponse] = await Promise.all([fetch(`${base}starquake.sna`), fetch(`${base}48.rom`)]);
+696:       if (!snapshotResponse.ok) throw new Error(`Could not load bundled snapshot (${snapshotResponse.status}).`);
+697:       if (!romResponse.ok) throw new Error(`Could not load bundled Spectrum ROM (${romResponse.status}).`);
+698:       const [snapshot, rom] = await Promise.all([snapshotResponse.arrayBuffer(), romResponse.arrayBuffer()]);
+699:       if (snapshot.byteLength !== 49179) throw new Error(`Bundled snapshot must be 49,179 bytes; got ${snapshot.byteLength}.`);
+700:       if (rom.byteLength < 16384) throw new Error(`Bundled Spectrum ROM must contain at least 16,384 bytes; got ${rom.byteLength}.`);
+701:       const worker = workersRef.current[0];
+702:       if (!worker) throw new Error('The emulator worker is unavailable. Reload the page to initialise it again.');
+703:       worker.postMessage({ type: 'init', snapshot, rom, cheats: false }, [snapshot, rom]);
+704:     } catch (cause) {
+705:       setError(cause instanceof Error ? cause.message : String(cause));
+706:       setStatus('Could not restart the game');
+707:       setReady(true);
+708:       setRestarting(false);
+709:     }
+710:   };
+711:   return (
+712:     <main className="app-shell">
+713:       <header className="topbar">
+714:         <div className="brand"><img className="brand-blob" src={`${import.meta.env.BASE_URL}blob.svg`} alt="BLOB" /><div><strong>STARQUAKE</strong><span>TILEMAP WEB EXPERIMENT</span></div></div>
+715:         <div className="header-controls">
+716:           <div className="transport">
+717:             <button className="primary-button" onClick={gameOver ? restartGame : togglePlay} disabled={!ready || restarting}>{gameOver ? <Play size={16} /> : playing ? <Pause size={16} /> : <Play size={16} />}{restarting ? 'Restarting…' : gameOver ? 'Restart' : playing ? 'Pause' : 'Play'}</button>
+718:             <button className="icon-button" title="Focus current room (Home)" onClick={() => focusRoom()}><Crosshair size={16} /></button>
+719:             <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
+720:           </div>
+721:           <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
+722:           <button className="keyboard-mode-button" title="Switch between mapped controls and the original Spectrum keyboard (Tab)" onClick={toggleKeyboardMode}>{keyboardMode === 'mapped' ? 'WASD' : 'SPECTRUM'}</button>
+723:           <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
+724:         </div>
+725:       </header>
+726:       <section className="workspace">
+727:         <div className="game-view">
+728:           <div className="hud-strip"><canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" /></div>
+729:           <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
+730:             <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
+731:           </div>
+732:         </div>
+733:         <aside className="side-panel">
+734:           <div className="panel-section">
+735:             <h3>CONTROLS <span className="control-hint">CUSTOMISE KEY BINDINGS</span></h3>
+736:             <div className="controls-config">
+737:               {controls.map(binding => (
+738:                 <div className="config-control" key={binding.action}>
+739:                   <span className="control-action">{binding.label}</span>
+740:                   <kbd className="key-value">{capturingAction === binding.action ? 'PRESS KEY…' : formatControlKey(binding.code)}</kbd>
+741:                   <button
+742:                     type="button"
+743:                     className={`edit-bind ${capturingAction === binding.action ? 'capturing' : ''}`}
+744:                     onClick={() => {
+745:                       captureActionRef.current = binding.action;
+746:                       setCapturingAction(binding.action);
+747:                     }}
+748:                   >{capturingAction === binding.action ? 'WAITING' : 'Edit'}</button>
+749:                 </div>
+750:               ))}
+751:             </div>
+752:             <p className="control-help">{capturingAction ? 'Press the new key. Press Escape to cancel.' : 'Select Edit, then press the key to assign.'}</p>
+753:             <div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div>
+754:             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
+755:           </div>
+756:         </aside>
+757:       </section>
+758:       {error && <div className="error-banner"><strong>Emulator:</strong> {error}<button onClick={() => setError('')}>Dismiss</button></div>}
+759:     </main>
+760:   );
+761: }
+</file>
+
+</files>
