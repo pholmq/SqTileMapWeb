@@ -6,7 +6,6 @@ const bright = [
   [0, 0, 0], [0, 0, 255], [255, 0, 0], [255, 0, 255],
   [0, 255, 0], [0, 255, 255], [255, 255, 0], [255, 255, 255],
 ];
-
 const palette = [normal, bright];
 const pixelLookup = new Uint32Array(2 * 256 * 256 * 8);
 for (let flash = 0; flash < 2; flash++) {
@@ -25,15 +24,12 @@ for (let flash = 0; flash < 2; flash++) {
     }
   }
 }
-
 const imageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
 const hudImageDataCache = new WeakMap<CanvasRenderingContext2D, ImageData>();
-
 export function spectrumScreenHasFlash(screen: Uint8Array) {
   for (let i = 0x1800; i < 0x1b00; i++) if (screen[i] & 0x80) return true;
   return false;
 }
-
 export function paintSpectrumRoom(
   target: CanvasRenderingContext2D,
   room: number,
@@ -61,7 +57,6 @@ export function paintSpectrumRoom(
   }
   target.putImageData(image, (room % 16) * 256, Math.floor(room / 16) * 144);
 }
-
 export function paintSpectrumHud(target: CanvasRenderingContext2D, screen: Uint8Array) {
   let image = hudImageDataCache.get(target);
   if (!image) {
@@ -84,6 +79,5 @@ export function paintSpectrumHud(target: CanvasRenderingContext2D, screen: Uint8
   }
   target.putImageData(image, 0, 0);
 }
-
 export const MAP_WIDTH = 16 * 256;
 export const MAP_HEIGHT = 32 * 144;

@@ -25,11 +25,14 @@ type WorkerMessage =
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
   | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
+
 type Camera = { scale: number; x: number; y: number };
 type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean };
+
 const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
 type ControlBinding = { action: GameAction; label: string; code: string; row: number; bit: number };
+
 const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'up', label: 'Up', code: 'KeyW', row: 2, bit: 0 },
   { action: 'down', label: 'Down / platform', code: 'KeyS', row: 1, bit: 0 },
@@ -37,11 +40,13 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
   { action: 'right', label: 'Right', code: 'KeyD', row: 5, bit: 0 },
   { action: 'fire', label: 'Fire', code: 'Space', row: 7, bit: 2 },
 ];
+
 const ROOM_FOCUS_DURATION_MS = 1150;
 const DEFAULT_ZOOM_SCALE = 2.11;
 const BACKGROUND_DIVISOR = 2;
 const SPECTRUM_FRAME_CYCLES = 70000;
 const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
+
 function readControls(): ControlBinding[] {
   try {
     const saved = JSON.parse(localStorage.getItem(CONTROL_STORAGE_KEY) || 'null');
@@ -52,6 +57,7 @@ function readControls(): ControlBinding[] {
   } catch { /* Use defaults when saved settings are unavailable. */ }
   return DEFAULT_CONTROLS.map(control => ({ ...control }));
 }
+
 function formatControlKey(code: string) {
   if (!code) return '—';
   if (code === 'Space') return 'SPACE';
@@ -92,6 +98,7 @@ export default function App() {
   const playingRef = useRef(false);
   const hasStartedRef = useRef(false);
   const soundOnRef = useRef(true);
+
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
   const worldRef = useRef<HTMLDivElement>(null);
   const cameraAnimationRef = useRef<number | null>(null);
@@ -111,8 +118,8 @@ export default function App() {
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
   const [capturingAction, setCapturingAction] = useState<GameAction | null>(null);
   const controlsRef = useRef(controls);
+  
   controlsRef.current = controls;
-
   soundOnRef.current = soundOn;
 
   const applyCamera = useCallback((next: Camera) => {
@@ -169,8 +176,6 @@ export default function App() {
     try { localStorage.setItem(CONTROL_STORAGE_KEY, JSON.stringify(controls)); } catch { /* Storage may be unavailable. */ }
   }, [controls]);
 
-  /* The game now starts running on load. Browsers keep audio blocked until the
-     first user gesture, so unlock it on the first click or key press. */
   useEffect(() => {
     const unlock = () => {
       window.removeEventListener('pointerdown', unlock);
@@ -192,18 +197,17 @@ export default function App() {
     audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
     void context.resume();
   }
+
   function stopAudio() {
     const context = audioRef.current.context;
     if (context) void context.close();
     audioRef.current = { context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
   }
+
   function playBeeper(events: Uint32Array, last: number) {
     const audio = audioRef.current;
     const context = audio.context;
     if (!context) return;
-
-    // A room can need several emulated CPU frames to finish drawing. The
-    // cycle counter restarts for each one, so unwrap those timestamps here.
     const eventCycles = new Float64Array(events.length);
     let cycleOffset = 0;
     let previousCycle = -1;
@@ -215,7 +219,6 @@ export default function App() {
       eventCycles[i] = cycle + cycleOffset;
       previousCycle = cycle;
     }
-
     const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
     const sampleRate = context.sampleRate;
     const sampleCount = Math.max(1, Math.round(sampleRate * totalCycles / 3500000));
@@ -231,7 +234,6 @@ export default function App() {
     let lowPass = audio.lowPass;
     let previousInput = audio.previousInput;
     let highPass = audio.highPass;
-
     for (let sample = 0; sample < sampleCount; sample++) {
       const sampleStart = sample * sampleCycles;
       const sampleEnd = (sample + 1) * sampleCycles;
@@ -250,14 +252,12 @@ export default function App() {
         nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
       }
       area += (sampleEnd - cursor) * (level ? 1 : -1);
-
       const input = (area / sampleCycles) * 0.14;
       lowPass += lowPassCoefficient * (input - lowPass);
       highPass = lowPass - previousInput + highPassCoefficient * highPass;
       previousInput = lowPass;
       samples[sample] = highPass;
     }
-
     audio.lastLevel = (last & 0x10) !== 0;
     audio.lowPass = lowPass;
     audio.previousInput = previousInput;
@@ -275,9 +275,7 @@ export default function App() {
     const canvas = mapCanvasRef.current;
     const ctx = canvas?.getContext('2d', { alpha: false });
     const previousRoom = currentRoomRef.current;
-    /* On the frame a transition happens, the entered room's screen is still a stale
-       copy of the room just left (its enemies and the player included). Do not paint
-       it; the next frame always carries the entered room's real screen. */
+    
     let staleRoom = -1;
     if (message.currentRoom !== previousRoom) {
       staleRoom = message.currentRoom;
@@ -288,7 +286,6 @@ export default function App() {
           visitedAtRef.current[previousRoom] = performance.now();
           setVisitedVersion(version => version + 1);
         }
-        /* A first visit must not briefly display the room we just left. */
         if (!visitedRoomsRef.current[message.currentRoom]) {
           screenCacheRef.current[message.currentRoom] = null;
           flashRoomsRef.current[message.currentRoom] = false;
@@ -302,6 +299,7 @@ export default function App() {
       setCurrentRoom(message.currentRoom);
       centerRoomKeepZoom(message.currentRoom);
     }
+
     if (ctx) {
       const flashPhase = ((Math.floor(performance.now() / 320) & 1) === 1);
       for (const item of message.dirty) {
@@ -324,13 +322,16 @@ export default function App() {
         }
       }
     }
+
     const hud = hudCanvasRef.current?.getContext('2d');
     const activeScreen = screenCacheRef.current[message.currentRoom];
     if (hud) {
       if (activeScreen && staleRoom < 0) paintSpectrumHud(hud, activeScreen);
-      else if (staleRoom < 0) hud.clearRect(0, 0, 256, 48); /* keep the previous HUD for the transition frame */
+      else if (staleRoom < 0) hud.clearRect(0, 0, 256, 48); 
     }
+    
     if (staleRoom < 0 && forceRoomRef.current >= 0) forceRoomRef.current = -1;
+
     if (message.gameOver) {
       if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
       initialPreviewTimerRef.current = null;
@@ -341,6 +342,7 @@ export default function App() {
       setGameOver(true);
       setStatus('Game over · all lives lost');
     }
+
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
   }, [centerRoomKeepZoom]);
 
@@ -533,7 +535,10 @@ export default function App() {
     if (canvas && overlay) {
       canvas.width = MAP_WIDTH; canvas.height = MAP_HEIGHT;
       overlay.width = MAP_WIDTH; overlay.height = MAP_HEIGHT;
-      if (hudCanvasRef.current) { hudCanvasRef.current.width = 256; hudCanvasRef.current.height = 48; }
+      if (hudCanvasRef.current) {
+        hudCanvasRef.current.width = 256;
+        hudCanvasRef.current.height = 48;
+      }
       const ctx = canvas.getContext('2d');
       if (ctx) { ctx.fillStyle = '#05080d'; ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT); }
     }
@@ -603,7 +608,6 @@ export default function App() {
         publishKeys();
         return;
       }
-
       if (event.code === 'Tab') {
         event.preventDefault();
         event.stopPropagation();
@@ -615,7 +619,6 @@ export default function App() {
         workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
         return;
       }
-
       const binding = controlsRef.current.find(item => item.code && item.code === event.code);
       if (keyboardModeRef.current === 'spectrum' ? Boolean(SPECTRUM_KEY_POSITIONS[event.code]) : Boolean(binding || SPECTRUM_KEY_POSITIONS[event.code])) {
         event.preventDefault();
@@ -681,7 +684,7 @@ export default function App() {
     applyCamera({ ...cameraRef.current, x: d.cameraX + event.clientX - d.x, y: d.cameraY + event.clientY - d.y });
   };
   const onPointerUp = () => { dragRef.current = null; };
-
+  
   const toggleKeyboardMode = () => {
     const next = keyboardModeRef.current === 'mapped' ? 'spectrum' : 'mapped';
     keyboardModeRef.current = next;
@@ -690,7 +693,7 @@ export default function App() {
     keyRowsRef.current = [...INITIAL_KEYS];
     workersRef.current[0]?.postMessage({ type: 'keys', rows: [...INITIAL_KEYS] });
   };
-
+  
   const togglePlay = () => {
     if (!ready || gameOver || restarting) return;
     if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
@@ -707,7 +710,7 @@ export default function App() {
       playingRef.current = true; setPlaying(true); if (soundOnRef.current) startAudio(); setStatus('Running'); beginFrame();
     }
   };
-
+  
   const restartGame = async () => {
     if (!ready || restarting) return;
     playingRef.current = false;
@@ -750,11 +753,9 @@ export default function App() {
             <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
           </div>
           <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
-          <button className="keyboard-mode-button" title="Switch between mapped controls and the original Spectrum keyboard (Tab)" onClick={toggleKeyboardMode}>{keyboardMode === 'mapped' ? 'WASD' : 'SPECTRUM'}</button>
           <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
         </div>
       </header>
-
       <section className="workspace">
         <div className="game-view">
           <div className="hud-strip"><canvas ref={hudCanvasRef} className="hud-canvas" aria-label="Starquake game HUD" /></div>
@@ -784,6 +785,24 @@ export default function App() {
             <p className="control-help">{capturingAction ? 'Press the new key. Press Escape to cancel.' : 'Select Edit, then press the key to assign.'}</p>
             <div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div>
             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
+          </div>
+          
+          <div className="panel-section">
+            <h3>TELEPORTER CODES</h3>
+            <div className="teleporter-codes">
+              <span>EXIAL</span><span>VEROX</span>
+              <span>RAMIX</span><span>TULSA</span>
+              <span>ASOIC</span><span>DELTA</span>
+              <span>ALGOL</span><span>KYZIA</span>
+              <span>ULTRA</span><span>IRAGE</span>
+              <span>OKTUP</span><span>SONIQ</span>
+              <span>AMIGA</span><span>AMAHA</span>
+              <span className="core-code">QUAKE <i>(Core)</i></span>
+            </div>
+            <p className="control-help" style={{ marginTop: '16px', textAlign: 'center', fontWeight: 700, fontSize: '12px', color: '#dce5f2' }}>SWITCH TO KEYBOARD WHEN ENTERING TELEPORTER CODES</p>
+            <button className="keyboard-mode-button full-width" title="Switch between mapped controls and the original Spectrum keyboard (Tab)" onClick={toggleKeyboardMode}>
+              {keyboardMode === 'mapped' ? 'MODE: CONTROLS' : 'MODE: KEYBOARD'}
+            </button>
           </div>
         </aside>
       </section>
