@@ -364,15 +364,13 @@ export default function App() {
   useEffect(() => {
     if (!gameOver) return;
     const target = highscoreCanvasRef.current?.getContext('2d');
-    const hud = hudCanvasRef.current;
     const map = mapCanvasRef.current;
-    if (!target || !hud || !map) return;
+    if (!target || !map) return;
     target.imageSmoothingEnabled = false;
     target.fillStyle = '#05080d';
-    target.fillRect(0, 0, 256, 192);
-    target.drawImage(hud, 0, 0, 256, 48);
+    target.fillRect(0, 0, 256, 144);
     const room = currentRoomRef.current;
-    target.drawImage(map, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 48, 256, 144);
+    target.drawImage(map, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 0, 256, 144);
   }, [gameOver]);
 
   const beginFrame = useCallback(() => {
@@ -791,7 +789,7 @@ export default function App() {
           <div className="map-viewport" ref={viewportRef} onWheel={onWheel} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp}>
             <div ref={worldRef} className="world" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.scale})` }}><canvas ref={mapCanvasRef} className="map-canvas" /><canvas ref={overlayRef} className="map-overlay" /></div>
           </div>
-          {gameOver && <div className="highscore-screen"><canvas ref={highscoreCanvasRef} width={256} height={192} aria-label="Starquake highscore screen" /></div>}
+          {gameOver && <div className="highscore-screen"><canvas ref={highscoreCanvasRef} width={256} height={144} aria-label="Starquake active room" /></div>}
         </div>
         <aside className="side-panel">
           <div className="panel-section">
