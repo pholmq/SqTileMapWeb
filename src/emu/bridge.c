@@ -311,8 +311,7 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
     int col=i%16, row=i/16;
     int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
     int active=is_active(r);
-    int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
-    if(!active && !visible && !visited_background) continue;
+    if(!active && !visible) continue;
     lock_room(r);
     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { unlock_room(r); return; }
     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
@@ -320,8 +319,8 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
       unlock_room(r);
       continue;
     }
-    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
-      int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
+    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)))) {
+      int frames=max_frames_per_room;
       for(int f=0;f<frames;f++) {
         run_one_frame(r);
         if(r->transitioned || r->drawing) break;
