@@ -232,7 +232,7 @@ static void on_hook(void *ctx, uint16_t address) {
        }
        break;
    }
-   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) r->cpu.cycles=r->run_budget;
+   if(r->transitioned) r->cpu.cycles=r->run_budget;
 }
 
 static void run_one_frame(Room *r) {
@@ -240,11 +240,11 @@ static void run_one_frame(Room *r) {
    r->transitioned=0;
    r->run_budget=CYCLES_BEFORE_INT;
    r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
-   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
+   if(r->transitioned) { r->frame_cycles=0; return; }
    z80_int(&r->cpu,1);
    r->run_budget=32;
    r->frame_cycles+=(int)z80_run(&r->cpu,r->run_budget);
-   if(r->transitioned || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { r->frame_cycles=0; return; }
+   if(r->transitioned) { r->frame_cycles=0; return; }
    z80_int(&r->cpu,0);
    r->frame_cycles-=FRAME_CYCLES;
 }
@@ -314,7 +314,7 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
 void emu_set_key_row(int row, int value) { if(row>=0 && row<8) key_matrix[row]=(uint8_t)value; }
 
 void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int frame_number, int background_divisor, int min_col, int max_col, int min_row, int max_row) {
-   if(!initialized || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
+   if(!initialized) return;
    if(start_room<0) start_room=0;
    if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
    if(max_frames_per_room<1) max_frames_per_room=1;
@@ -323,7 +323,6 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
    __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
    
    for(int i=start_room;i<end_room;i++) {
-     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
      Room *r=&rooms[i];
      if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
         __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) continue;
@@ -334,7 +333,6 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
      if(!active && !visible) continue;
      
      lock_room(r);
-     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { unlock_room(r); return; }
      
      if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
         __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
@@ -349,7 +347,6 @@ void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int f
        }
      }
      unlock_room(r);
-     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
    }
 }
 
