@@ -766,11 +766,9 @@ export default function App() {
             <div className="control-row"><kbd>HOME</kbd><span>Focus active room</span><kbd>END</kbd><span>Fit map</span></div>
             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
           </div>
-          <div className="panel-footer">TileMap-style room emulation · Z80 WebAssembly · GPL-3.0</div>
         </aside>
       </section>
       {error && <div className="error-banner"><strong>Emulator:</strong> {error}<button onClick={() => setError('')}>Dismiss</button></div>}
-      <footer className="footer"><span>STARQUAKE · 1985 · BUBBLE BUS SOFTWARE</span><span>Bundled Starquake snapshot · bundled Spectrum 48K ROM</span></footer>
     </main>
   );
 }
