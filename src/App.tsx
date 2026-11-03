@@ -167,6 +167,22 @@ export default function App() {
     try { localStorage.setItem(CONTROL_STORAGE_KEY, JSON.stringify(controls)); } catch { /* Storage may be unavailable. */ }
   }, [controls]);
 
+  /* The game now starts running on load. Browsers keep audio blocked until the
+     first user gesture, so unlock it on the first click or key press. */
+  useEffect(() => {
+    const unlock = () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      if (playingRef.current && soundOnRef.current) startAudio();
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+    };
+  }, []);
+
   function startAudio() {
     const existing = audioRef.current.context;
     if (existing) { void existing.resume(); return; }
@@ -404,14 +420,6 @@ export default function App() {
           setPlaying(true);
           setStatus('Running');
           beginFrame();
-          initialPreviewTimerRef.current = setTimeout(() => {
-            if (playingRef.current) {
-              playingRef.current = false;
-              setPlaying(false);
-              setStatus('Paused');
-            }
-            initialPreviewTimerRef.current = null;
-          }, 1000);
         }
       });
       return;
