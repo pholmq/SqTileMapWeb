@@ -297,29 +297,36 @@ int emu_init(const uint8_t *sna, int sna_len, const uint8_t *rom, int rom_len, i
 void emu_set_key_row(int row, int value) { if(row>=0 && row<8) key_matrix[row]=(uint8_t)value; }
 void emu_tick_range(int start_room, int end_room, int max_frames_per_room, int frame_number, int background_divisor, int min_col, int max_col, int min_row, int max_row) {
   if(!initialized || __atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
-  (void)min_col; (void)max_col; (void)min_row; (void)max_row;
   if(start_room<0) start_room=0;
   if(end_room>ROOM_COUNT) end_room=ROOM_COUNT;
-  (void)max_frames_per_room;
-  (void)background_divisor;
+  if(max_frames_per_room<1) max_frames_per_room=1;
+  if(max_frames_per_room>50) max_frames_per_room=50;
+  if(background_divisor<1) background_divisor=1;
   __atomic_store_n(&active_frame_number,frame_number,__ATOMIC_SEQ_CST);
   for(int i=start_room;i<end_room;i++) {
     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
     Room *r=&rooms[i];
-    if(!is_active(r)) continue;
     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) continue;
+    int col=i%16, row=i/16;
+    int visible=(col>=min_col && col<=max_col && row>=min_row && row<=max_row);
+    int active=is_active(r);
+    int visited_background=!active && !visible && r->visited && ((frame_number + i) % 5 == 0);
+    if(!active && !visible && !visited_background) continue;
     lock_room(r);
-    if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) {
-      unlock_room(r);
-      return;
-    }
+    if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) { unlock_room(r); return; }
     if(__atomic_load_n(&transition_frame,__ATOMIC_SEQ_CST)==frame_number &&
        __atomic_load_n(&transition_room,__ATOMIC_SEQ_CST)==i) {
       unlock_room(r);
       continue;
     }
-    if(r->running) run_one_frame(r);
+    if(r->running && (active || (visible && (!r->drawing || frame_number % background_divisor == 0)) || visited_background)) {
+      int frames=visited_background ? (r->drawing ? 1 : max_frames_per_room) : max_frames_per_room;
+      for(int f=0;f<frames;f++) {
+        run_one_frame(r);
+        if(r->transitioned || r->drawing) break;
+      }
+    }
     unlock_room(r);
     if(__atomic_load_n(&game_over,__ATOMIC_SEQ_CST)) return;
   }
