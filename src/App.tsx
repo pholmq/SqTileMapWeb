@@ -369,10 +369,9 @@ export default function App() {
     if (!target || !hud || !map) return;
     target.imageSmoothingEnabled = false;
     target.fillStyle = '#05080d';
-    target.fillRect(0, 0, 256, 192);
-    target.drawImage(hud, 0, 0, 256, 48);
+    target.fillRect(0, 0, 256, 144);
     const room = currentRoomRef.current;
-    target.drawImage(map, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 48, 256, 144);
+    target.drawImage(map, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 0, 256, 144);
   }, [gameOver]);
 
   const beginFrame = useCallback(() => {
