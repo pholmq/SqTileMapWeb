@@ -33,7 +33,7 @@ npm run dev
 
 Open the Vite URL shown in the terminal. Vite is configured with the cross-origin isolation headers needed for `SharedArrayBuffer` and parallel WebAssembly workers.
 
-To hear C64 music, select a legally obtained `Starquake.sid` (or another SID file) in the **C64 SID Music** panel, then click **Play SID**. If the SID contains multiple subtunes, choose one from the Subtune selector. The file is processed locally in your browser and is not uploaded. The project does not bundle the Starquake music file or C64 system ROMs.
+To hear C64 music, select a legally obtained `Starquake.sid` (or another SID file) in the **C64 SID Music** panel, then click **Play SID**. If the SID contains multiple subtunes, choose one from the Subtune selector. The file is processed locally in your browser and is not uploaded. The project does not bundle the Starquake music file or C64 system ROMs. The build copies the SID emulator's WebAssembly binary, licence notices, and corresponding source archive into the generated site assets.
 
 1. Wait for the Z80 workers to load.
 2. The bundled snapshot and ROM are fetched automatically and used to initialise all 512 room states.
