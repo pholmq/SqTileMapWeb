@@ -4,6 +4,7 @@ This project is a browser-oriented adaptation of the Starquake support in Simon 
 
 - TileMap: Copyright Simon Owen. Source: https://github.com/simonowen/tilemap (GPL-3.0-or-later as distributed with the supplied source archive).
 - Z80 CPU core: Copyright (C) 1999-2018 Manuel Sainz de Baranda y Goñi. The original Z80 core source headers identify it as GNU GPL version 3.
+- C64 SID playback: `libsidplayfp-wasm` by Chris Gleissner, based on libsidplayfp and reSIDfp; GPL-2.0-or-later. Source and third-party notices: https://github.com/chrisgleissner/libsidplayfp-wasm. The dependency is used for locally selected SID files; this project does not redistribute Starquake music or C64 ROM images.
 - Starquake: by Stephen J. Crow, copyright 1985 Bubble Bus Software. The snapshot in `public/starquake.sna` was supplied by the user for this private development task. It is not part of the TileMap open-source licence and should not be redistributed unless you have the necessary rights.
 
 The project source is distributed under GPL-3.0 to comply with the included TileMap/Z80-derived code. See `COPYING.txt`.
