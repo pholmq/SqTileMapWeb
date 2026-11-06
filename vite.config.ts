@@ -7,7 +7,8 @@ const isolationHeaders = {
 };
 
 export default defineConfig({
-  base: '/SqTileMapWeb/',
+  // Use root path for Vercel, and repo path for GitHub Pages
+  base: process.env.VERCEL ? '/' : '/SqTileMapWeb/',
   plugins: [react()],
   publicDir: 'public',
   worker: { format: 'es' },
