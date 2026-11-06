@@ -9,7 +9,9 @@
     "preview": "vite preview --host 0.0.0.0",
     "build:wasm": "sh scripts/build-wasm.sh",
     "test:assets": "node scripts/validate-assets.mjs",
-    "test": "npm run test:assets && node scripts/smoke-wasm.mjs"
+    "test": "npm run test:assets && node scripts/smoke-wasm.mjs",
+    "predev": "node scripts/copy-sid-wasm.mjs",
+    "prebuild": "node scripts/copy-sid-wasm.mjs"
   },
   "dependencies": {
     "lucide-react": "0.468.0",
