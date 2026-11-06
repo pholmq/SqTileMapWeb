@@ -55,5 +55,3 @@ self.onmessage = async (event: MessageEvent<Command>) => {
     self.postMessage({ type: 'error', message: error instanceof Error ? error.message : String(error) });
   }
 };
-
-self.addEventListener('close', () => engine?.dispose());
