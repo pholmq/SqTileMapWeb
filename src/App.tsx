@@ -1,5 +1,6 @@
 import { PointerEvent, WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
+import { SidMusicPlayer } from './SidMusicPlayer';
 import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 
 const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
@@ -100,6 +101,7 @@ export default function App() {
   const playingRef = useRef(false);
   const hasStartedRef = useRef(false);
   const soundOnRef = useRef(true);
+  const sidMusicActiveRef = useRef(false);
 
   const [camera, setCamera] = useState<Camera>(cameraRef.current);
   const worldRef = useRef<HTMLDivElement>(null);
@@ -115,6 +117,7 @@ export default function App() {
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const onSidPlayingChange = useCallback((active: boolean) => { sidMusicActiveRef.current = active; }, []);
   const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
   const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
@@ -358,7 +361,7 @@ export default function App() {
       setStatus('Game over · all lives lost');
     }
 
-    if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
+    if (soundOnRef.current && !sidMusicActiveRef.current) playBeeper(message.audioEvents, message.audioLast);
   }, [centerRoomKeepZoom]);
 
   useEffect(() => {
@@ -815,6 +818,10 @@ export default function App() {
             <div className="control-row"><kbd>DRAG</kbd><span>Pan map</span><kbd>WHEEL</kbd><span>Zoom</span></div>
           </div>
           
+          <div className="panel-section sid-music-panel">
+            <h3>C64 SID MUSIC</h3>
+            <SidMusicPlayer onPlayingChange={onSidPlayingChange} />
+          </div>
           <div className="panel-section">
             <h3>TELEPORTER CODES</h3>
             <div className="teleporter-codes">
