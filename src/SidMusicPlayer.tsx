@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
-type Props = { onPlayingChange: (active: boolean) => void };
+type Props = { onPlayingChange: (active: boolean) => void; soundOn: boolean };
 
 type SidWorkerMessage =
   | { type: 'loaded'; songs: number; currentSong: number }
   | { type: 'error'; message: string }
   | { type: 'audio'; samples: Float32Array };
 
-export function SidMusicPlayer({ onPlayingChange }: Props) {
+export function SidMusicPlayer({ onPlayingChange, soundOn }: Props) {
   const workerRef = useRef<Worker | null>(null);
   const contextRef = useRef<AudioContext | null>(null);
   const nodeRef = useRef<AudioWorkletNode | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
   const [status, setStatus] = useState('Choose a .sid file');
   const [fileName, setFileName] = useState('');
   const [songs, setSongs] = useState(1);
@@ -48,10 +49,16 @@ export function SidMusicPlayer({ onPlayingChange }: Props) {
       if (contextRef.current) void contextRef.current.close();
       workerRef.current = null;
       nodeRef.current = null;
+      gainRef.current = null;
       contextRef.current = null;
       onPlayingChange(false);
     };
   }, [onPlayingChange]);
+
+  useEffect(() => {
+    const context = contextRef.current;
+    if (context && gainRef.current) gainRef.current.gain.setTargetAtTime(soundOn ? 1 : 0, context.currentTime, 0.015);
+  }, [soundOn]);
 
   async function loadFile(file?: File) {
     if (!file) return;
@@ -81,8 +88,12 @@ export function SidMusicPlayer({ onPlayingChange }: Props) {
         node.port.onmessage = (event: MessageEvent<{ type: string }>) => {
           if (event.data.type === 'need-data') worker.postMessage({ type: 'render' });
         };
-        node.connect(context.destination);
+        const gain = context.createGain();
+        gain.gain.value = soundOn ? 1 : 0;
+        node.connect(gain);
+        gain.connect(context.destination);
         nodeRef.current = node;
+        gainRef.current = gain;
         contextRef.current = context;
       }
       await context.resume();
@@ -98,7 +109,9 @@ export function SidMusicPlayer({ onPlayingChange }: Props) {
   function stop() {
     workerRef.current?.postMessage({ type: 'stop' });
     nodeRef.current?.disconnect();
+    gainRef.current?.disconnect();
     nodeRef.current = null;
+    gainRef.current = null;
     if (contextRef.current) {
       void contextRef.current.close();
       contextRef.current = null;
