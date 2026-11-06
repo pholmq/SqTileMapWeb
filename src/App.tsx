@@ -86,7 +86,7 @@ export default function App() {
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
-  const audioRef = useRef<{ context: AudioContext | null; node: AudioWorkletNode | null; lastLevel: boolean; filterZ1: number; filterZ2: number; previousInput: number; highPass: number }>({ context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 });
+  const audioRef = useRef<{ context: AudioContext | null; node: AudioWorkletNode | null; lastLevel: boolean; bodyZ1: number; bodyZ2: number; filterZ1: number; filterZ2: number; previousInput: number; highPass: number }>({ context: null, node: null, lastLevel: false, bodyZ1: 0, bodyZ2: 0, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
   /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
@@ -213,7 +213,7 @@ export default function App() {
     }
 
     const context = new AudioContext();
-    audioRef.current = { context, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
+    audioRef.current = { context, node: null, lastLevel: false, bodyZ1: 0, bodyZ2: 0, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
     try {
       await context.audioWorklet.addModule(`${import.meta.env.BASE_URL}beeper-processor.js`);
       const node = new AudioWorkletNode(context, 'spectrum-beeper', {
@@ -231,7 +231,7 @@ export default function App() {
       await context.resume();
     } catch (error) {
       if (audioRef.current.context === context) {
-        audioRef.current = { context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
+        audioRef.current = { context: null, node: null, lastLevel: false, bodyZ1: 0, bodyZ2: 0, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
       }
       await context.close();
       console.warn('Spectrum audio could not be started:', error);
@@ -242,7 +242,7 @@ export default function App() {
     const { context, node } = audioRef.current;
     node?.disconnect();
     if (context) void context.close();
-    audioRef.current = { context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
+    audioRef.current = { context: null, node: null, lastLevel: false, bodyZ1: 0, bodyZ2: 0, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
   }
 
   function playBeeper(events: Uint32Array, last: number) {
@@ -269,9 +269,22 @@ export default function App() {
     let eventIndex = 0;
     let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
     const sampleCycles = totalCycles / sampleCount;
-    // Gentle 2-pole Butterworth-style output filtering: retain the beeper's
-    // pulse character while rolling off the brittle upper harmonics.
-    const cutoff = 3400;
+    // Add a restrained low-mid shelf for speaker-like body, then use a
+    // stronger 2-pole low-pass to soften the Spectrum beeper's sharp edge.
+    const shelfGain = Math.pow(10, 3.5 / 40);
+    const shelfOmega = 2 * Math.PI * 380 / sampleRate;
+    const shelfCosine = Math.cos(shelfOmega);
+    const shelfSine = Math.sin(shelfOmega);
+    const shelfAlpha = shelfSine / (2 * Math.SQRT1_2);
+    const shelfBeta = 2 * Math.sqrt(shelfGain) * shelfAlpha;
+    const shelfA0 = (shelfGain + 1) + (shelfGain - 1) * shelfCosine + shelfBeta;
+    const shelfB0 = shelfGain * ((shelfGain + 1) - (shelfGain - 1) * shelfCosine + shelfBeta) / shelfA0;
+    const shelfB1 = 2 * shelfGain * ((shelfGain - 1) - (shelfGain + 1) * shelfCosine) / shelfA0;
+    const shelfB2 = shelfGain * ((shelfGain + 1) - (shelfGain - 1) * shelfCosine - shelfBeta) / shelfA0;
+    const shelfA1 = -2 * ((shelfGain - 1) + (shelfGain + 1) * shelfCosine) / shelfA0;
+    const shelfA2 = ((shelfGain + 1) + (shelfGain - 1) * shelfCosine - shelfBeta) / shelfA0;
+
+    const cutoff = 2200;
     const omega = 2 * Math.PI * cutoff / sampleRate;
     const cosine = Math.cos(omega);
     const sine = Math.sin(omega);
@@ -282,7 +295,9 @@ export default function App() {
     const b2 = b0;
     const a1 = (-2 * cosine) / a0;
     const a2 = (1 - alpha) / a0;
-    const highPassCoefficient = Math.exp(-2 * Math.PI * 45 / sampleRate);
+    const highPassCoefficient = Math.exp(-2 * Math.PI * 38 / sampleRate);
+    let bodyZ1 = audio.bodyZ1;
+    let bodyZ2 = audio.bodyZ2;
     let filterZ1 = audio.filterZ1;
     let filterZ2 = audio.filterZ2;
     let previousInput = audio.previousInput;
@@ -305,8 +320,11 @@ export default function App() {
         nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
       }
       area += (sampleEnd - cursor) * (level ? 1 : -1);
-      const input = (area / sampleCycles) * 0.12;
-      const filtered = b0 * input + filterZ1;
+      const input = (area / sampleCycles) * 0.11;
+      const body = shelfB0 * input + bodyZ1;
+      bodyZ1 = shelfB1 * input - shelfA1 * body + bodyZ2;
+      bodyZ2 = shelfB2 * input - shelfA2 * body;
+      const filtered = b0 * body + filterZ1;
       filterZ1 = b1 * input - a1 * filtered + filterZ2;
       filterZ2 = b2 * input - a2 * filtered;
       highPass = filtered - previousInput + highPassCoefficient * highPass;
@@ -314,6 +332,8 @@ export default function App() {
       samples[sample] = highPass;
     }
     audio.lastLevel = (last & 0x10) !== 0;
+    audio.bodyZ1 = bodyZ1;
+    audio.bodyZ2 = bodyZ2;
     audio.filterZ1 = filterZ1;
     audio.filterZ2 = filterZ2;
     audio.previousInput = previousInput;
