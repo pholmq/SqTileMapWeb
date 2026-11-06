@@ -18,7 +18,8 @@ A browser prototype based on the room-emulation architecture used by Simon Owen'
 - Map camera supports continuous zoom, pointer-centred wheel zoom, drag pan, full-map fit, and focus on the active room.
 - Default game controls are **W/A/S/D and Space**. The controls can be reassigned in the Controls panel.
 - The emulator also passes through the physical ZX Spectrum keyboard matrix, allowing other Spectrum keys to be used where the game expects them.
-- Browser beeper output is a basic Web Audio approximation; it is not yet a cycle-accurate AY/48K audio implementation.
+- Browser beeper output remains a basic Web Audio approximation.
+- Optional C64 music playback uses `libsidplayfp-wasm` (SID emulation compiled to WebAssembly). Load a `.sid`/`.psid`/`.rsid` file locally in the **C64 SID Music** panel; the player supports subtunes and does not upload the file. SID music is separate from the Spectrum game's own beeper effects.
 - Optional TileMap cheat pokes.
 
 ## Run locally
@@ -31,6 +32,8 @@ npm run dev
 ```
 
 Open the Vite URL shown in the terminal. Vite is configured with the cross-origin isolation headers needed for `SharedArrayBuffer` and parallel WebAssembly workers.
+
+To hear C64 music, select a legally obtained `Starquake.sid` (or another SID file) in the **C64 SID Music** panel, then click **Play SID**. If the SID contains multiple subtunes, choose one from the Subtune selector. The file is processed locally in your browser and is not uploaded. The project does not bundle the Starquake music file or C64 system ROMs.
 
 1. Wait for the Z80 workers to load.
 2. The bundled snapshot and ROM are fetched automatically and used to initialise all 512 room states.
@@ -135,4 +138,4 @@ The current bridge intentionally mirrors the TileMap CPU/memory and room-transfe
 
 ## Licence
 
-GPL-3.0. See `COPYING.txt` and `ATTRIBUTION.md`. The Starquake game snapshot and Spectrum ROM are separately copyrighted material and are not relicensed by this repository.
+GPL-3.0. See `COPYING.txt` and `ATTRIBUTION.md`. The optional `libsidplayfp-wasm` dependency is GPL-2.0-or-later; its source and notices are available at [chrisgleissner/libsidplayfp-wasm](https://github.com/chrisgleissner/libsidplayfp-wasm). The Starquake game snapshot and Spectrum ROM are separately copyrighted material and are not relicensed by this repository.
