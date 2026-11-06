@@ -820,7 +820,7 @@ export default function App() {
           
           <div className="panel-section sid-music-panel">
             <h3>C64 SID MUSIC</h3>
-            <SidMusicPlayer onPlayingChange={onSidPlayingChange} />
+            <SidMusicPlayer onPlayingChange={onSidPlayingChange} soundOn={soundOn} />
           </div>
           <div className="panel-section">
             <h3>TELEPORTER CODES</h3>
