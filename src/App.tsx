@@ -86,7 +86,7 @@ export default function App() {
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
-  const audioRef = useRef<{ context: AudioContext | null; node: AudioWorkletNode | null; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
+  const audioRef = useRef<{ context: AudioContext | null; node: AudioWorkletNode | null; lastLevel: boolean; filterZ1: number; filterZ2: number; previousInput: number; highPass: number }>({ context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
   /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
@@ -213,7 +213,7 @@ export default function App() {
     }
 
     const context = new AudioContext();
-    audioRef.current = { context, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+    audioRef.current = { context, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
     try {
       await context.audioWorklet.addModule(`${import.meta.env.BASE_URL}beeper-processor.js`);
       const node = new AudioWorkletNode(context, 'spectrum-beeper', {
@@ -231,7 +231,7 @@ export default function App() {
       await context.resume();
     } catch (error) {
       if (audioRef.current.context === context) {
-        audioRef.current = { context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+        audioRef.current = { context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
       }
       await context.close();
       console.warn('Spectrum audio could not be started:', error);
@@ -242,7 +242,7 @@ export default function App() {
     const { context, node } = audioRef.current;
     node?.disconnect();
     if (context) void context.close();
-    audioRef.current = { context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+    audioRef.current = { context: null, node: null, lastLevel: false, filterZ1: 0, filterZ2: 0, previousInput: 0, highPass: 0 };
   }
 
   function playBeeper(events: Uint32Array, last: number) {
@@ -269,9 +269,22 @@ export default function App() {
     let eventIndex = 0;
     let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
     const sampleCycles = totalCycles / sampleCount;
-    const lowPassCoefficient = 1 - Math.exp(-2 * Math.PI * 4800 / sampleRate);
-    const highPassCoefficient = Math.exp(-2 * Math.PI * 35 / sampleRate);
-    let lowPass = audio.lowPass;
+    // Gentle 2-pole Butterworth-style output filtering: retain the beeper's
+    // pulse character while rolling off the brittle upper harmonics.
+    const cutoff = 3400;
+    const omega = 2 * Math.PI * cutoff / sampleRate;
+    const cosine = Math.cos(omega);
+    const sine = Math.sin(omega);
+    const alpha = sine / (2 * Math.SQRT1_2);
+    const a0 = 1 + alpha;
+    const b0 = ((1 - cosine) / 2) / a0;
+    const b1 = (1 - cosine) / a0;
+    const b2 = b0;
+    const a1 = (-2 * cosine) / a0;
+    const a2 = (1 - alpha) / a0;
+    const highPassCoefficient = Math.exp(-2 * Math.PI * 45 / sampleRate);
+    let filterZ1 = audio.filterZ1;
+    let filterZ2 = audio.filterZ2;
     let previousInput = audio.previousInput;
     let highPass = audio.highPass;
     for (let sample = 0; sample < sampleCount; sample++) {
@@ -292,14 +305,17 @@ export default function App() {
         nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
       }
       area += (sampleEnd - cursor) * (level ? 1 : -1);
-      const input = (area / sampleCycles) * 0.14;
-      lowPass += lowPassCoefficient * (input - lowPass);
-      highPass = lowPass - previousInput + highPassCoefficient * highPass;
-      previousInput = lowPass;
+      const input = (area / sampleCycles) * 0.12;
+      const filtered = b0 * input + filterZ1;
+      filterZ1 = b1 * input - a1 * filtered + filterZ2;
+      filterZ2 = b2 * input - a2 * filtered;
+      highPass = filtered - previousInput + highPassCoefficient * highPass;
+      previousInput = filtered;
       samples[sample] = highPass;
     }
     audio.lastLevel = (last & 0x10) !== 0;
-    audio.lowPass = lowPass;
+    audio.filterZ1 = filterZ1;
+    audio.filterZ2 = filterZ2;
     audio.previousInput = previousInput;
     audio.highPass = highPass;
     // AudioWorklet consumes contiguous PCM blocks; no per-frame source scheduling.
