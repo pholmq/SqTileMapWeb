@@ -1,12 +1,12 @@
 class SpectrumBeeperProcessor extends AudioWorkletProcessor {
-  private blocks: Float32Array[] = [];
-  private readOffset = 0;
-  private queuedSamples = 0;
-  private readonly maxQueuedSamples = Math.round(sampleRate * 0.18);
-
   constructor() {
     super();
-    this.port.onmessage = (event: MessageEvent<Float32Array>) => {
+    this.blocks = [];
+    this.readOffset = 0;
+    this.queuedSamples = 0;
+    this.maxQueuedSamples = Math.round(sampleRate * 0.18);
+
+    this.port.onmessage = (event) => {
       const block = event.data;
       if (!(block instanceof Float32Array) || block.length === 0) return;
       this.blocks.push(block);
@@ -14,15 +14,15 @@ class SpectrumBeeperProcessor extends AudioWorkletProcessor {
 
       // Keep latency bounded if the main thread is briefly delayed.
       while (this.queuedSamples > this.maxQueuedSamples && this.blocks.length > 1) {
-        const removed = this.blocks.shift()!;
+        const removed = this.blocks.shift();
         this.queuedSamples -= removed.length - this.readOffset;
         this.readOffset = 0;
       }
     };
   }
 
-  process(_inputs: Float32Array[][], outputs: Float32Array[][]): boolean {
-    const output = outputs[0]?.[0];
+  process(_inputs, outputs) {
+    const output = outputs[0] && outputs[0][0];
     if (!output) return true;
     output.fill(0);
 
