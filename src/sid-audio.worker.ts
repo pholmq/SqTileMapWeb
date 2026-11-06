@@ -35,7 +35,7 @@ self.onmessage = async (event: MessageEvent<Command>) => {
     if (message.type === 'load') {
       running = false;
       engine?.dispose();
-      engine = new SidAudioEngine({ sampleRate: 48000, stereo: true, engine: 'residfp' });
+      engine = new SidAudioEngine({ sampleRate: 48000, stereo: true, engine: 'residfp', locateFile: (asset) => new URL(`${import.meta.env.BASE_URL}sid-wasm/${asset}`, self.location.origin).href });
       await engine.loadSidBuffer(new Uint8Array(message.buffer));
       const info = engine.getTuneInfo();
       self.postMessage({ type: 'loaded', songs: info?.songs ?? 1, currentSong: info?.currentSong ?? 0 });
