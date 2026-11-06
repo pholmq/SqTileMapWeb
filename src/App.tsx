@@ -86,7 +86,7 @@ export default function App() {
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
-  const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
+  const audioRef = useRef<{ context: AudioContext | null; node: AudioWorkletNode | null; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
   /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
@@ -205,24 +205,51 @@ export default function App() {
     };
   }, []);
 
-  function startAudio() {
-    const existing = audioRef.current.context;
-    if (existing) { void existing.resume(); return; }
+  async function startAudio() {
+    const audio = audioRef.current;
+    if (audio.context) {
+      await audio.context.resume();
+      return;
+    }
+
     const context = new AudioContext();
-    audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
-    void context.resume();
+    audioRef.current = { context, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+    try {
+      await context.audioWorklet.addModule(`${import.meta.env.BASE_URL}beeper-processor.js`);
+      const node = new AudioWorkletNode(context, 'spectrum-beeper', {
+        numberOfInputs: 0,
+        numberOfOutputs: 1,
+        outputChannelCount: [1],
+      });
+      node.connect(context.destination);
+      if (audioRef.current.context !== context) {
+        node.disconnect();
+        await context.close();
+        return;
+      }
+      audioRef.current.node = node;
+      await context.resume();
+    } catch (error) {
+      if (audioRef.current.context === context) {
+        audioRef.current = { context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+      }
+      await context.close();
+      console.warn('Spectrum audio could not be started:', error);
+    }
   }
 
   function stopAudio() {
-    const context = audioRef.current.context;
+    const { context, node } = audioRef.current;
+    node?.disconnect();
     if (context) void context.close();
-    audioRef.current = { context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+    audioRef.current = { context: null, node: null, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
   }
 
   function playBeeper(events: Uint32Array, last: number) {
     const audio = audioRef.current;
     const context = audio.context;
-    if (!context) return;
+    const node = audio.node;
+    if (!context || !node) return;
     const eventCycles = new Float64Array(events.length);
     let cycleOffset = 0;
     let previousCycle = -1;
@@ -237,9 +264,7 @@ export default function App() {
     const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
     const sampleRate = context.sampleRate;
     const sampleCount = Math.max(1, Math.round(sampleRate * totalCycles / 3500000));
-    const frameDuration = sampleCount / sampleRate;
-    const buffer = context.createBuffer(1, sampleCount, sampleRate);
-    const samples = buffer.getChannelData(0);
+    const samples = new Float32Array(sampleCount);
     let level = audio.lastLevel;
     let eventIndex = 0;
     let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
@@ -277,13 +302,8 @@ export default function App() {
     audio.lowPass = lowPass;
     audio.previousInput = previousInput;
     audio.highPass = highPass;
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(context.destination);
-    const startAt = Math.max(context.currentTime + 0.004, audio.nextTime);
-    source.start(startAt);
-    audio.nextTime = startAt + frameDuration;
-    source.onended = () => source.disconnect();
+    // AudioWorklet consumes contiguous PCM blocks; no per-frame source scheduling.
+    node.port.postMessage(samples, [samples.buffer]);
   }
 
   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
