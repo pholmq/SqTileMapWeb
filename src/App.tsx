@@ -1,6 +1,6 @@
 import { PointerEvent, WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
-import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
+import { GraphicsStyle, MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
 import { AudioStyle, C64AudioEngine } from './c64Audio';
 
 const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
@@ -47,10 +47,19 @@ const DEFAULT_ZOOM_SCALE = 2.11;
 const BACKGROUND_DIVISOR = 2;
 const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
 const AUDIO_STYLE_STORAGE_KEY = 'starquake-audio-style-v1';
+const GFX_STYLE_STORAGE_KEY = 'starquake-gfx-style-v1';
 
 function readAudioStyle(): AudioStyle {
   try {
     const saved = localStorage.getItem(AUDIO_STYLE_STORAGE_KEY);
+    if (saved === 'c64' || saved === 'spectrum') return saved;
+  } catch { /* Use default when storage is unavailable. */ }
+  return 'c64';
+}
+
+function readGraphicsStyle(): GraphicsStyle {
+  try {
+    const saved = localStorage.getItem(GFX_STYLE_STORAGE_KEY);
     if (saved === 'c64' || saved === 'spectrum') return saved;
   } catch { /* Use default when storage is unavailable. */ }
   return 'c64';
@@ -126,6 +135,8 @@ export default function App() {
   const [soundOn, setSoundOn] = useState(true);
   const [audioStyle, setAudioStyle] = useState<AudioStyle>(readAudioStyle);
   const audioStyleRef = useRef<AudioStyle>(audioStyle);
+  const [graphicsStyle, setGraphicsStyle] = useState<GraphicsStyle>(readGraphicsStyle);
+  const graphicsStyleRef = useRef<GraphicsStyle>(graphicsStyle);
   const gameOverRef = useRef(false);
   const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
   const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
@@ -136,6 +147,7 @@ export default function App() {
   controlsRef.current = controls;
   soundOnRef.current = soundOn;
   audioStyleRef.current = audioStyle;
+  graphicsStyleRef.current = graphicsStyle;
   gameOverRef.current = gameOver;
 
   const applyCamera = useCallback((next: Camera) => {
@@ -214,6 +226,29 @@ export default function App() {
   }, [audioStyle]);
 
   useEffect(() => {
+    try { localStorage.setItem(GFX_STYLE_STORAGE_KEY, graphicsStyle); } catch { /* Storage may be unavailable. */ }
+    const ctx = mapCanvasRef.current?.getContext('2d', { alpha: false });
+    if (ctx) {
+      const flashPhase = lastFlashPhaseRef.current;
+      for (let room = 0; room < screenCacheRef.current.length; room++) {
+        const screen = screenCacheRef.current[room];
+        if (screen) paintSpectrumRoom(ctx, room, screen, flashPhase, graphicsStyle);
+      }
+    }
+    const hud = hudCanvasRef.current?.getContext('2d');
+    const activeScreen = screenCacheRef.current[currentRoomRef.current];
+    if (hud && activeScreen) paintSpectrumHud(hud, activeScreen, graphicsStyle);
+    if (gameOverRef.current && mapCanvasRef.current) {
+      const target = highscoreCanvasRef.current?.getContext('2d');
+      if (target) {
+        target.imageSmoothingEnabled = false;
+        const room = currentRoomRef.current;
+        target.drawImage(mapCanvasRef.current, (room % 16) * 256, Math.floor(room / 16) * 144, 256, 144, 0, 0, 256, 144);
+      }
+    }
+  }, [graphicsStyle]);
+
+  useEffect(() => {
     const unlock = () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
@@ -290,14 +325,14 @@ export default function App() {
       if (flashPhase !== lastFlashPhaseRef.current) {
         for (let room = 0; room < screenCacheRef.current.length; room++) {
           const screen = screenCacheRef.current[room];
-          if (screen && flashRoomsRef.current[room]) paintSpectrumRoom(ctx, room, screen, flashPhase);
+          if (screen && flashRoomsRef.current[room]) paintSpectrumRoom(ctx, room, screen, flashPhase, graphicsStyleRef.current);
         }
         lastFlashPhaseRef.current = flashPhase;
       } else {
         for (const item of message.dirty) {
           if (item.room === staleRoom) continue;
           const screen = screenCacheRef.current[item.room];
-          if (screen) paintSpectrumRoom(ctx, item.room, screen, flashPhase);
+          if (screen) paintSpectrumRoom(ctx, item.room, screen, flashPhase, graphicsStyleRef.current);
         }
       }
     }
@@ -305,7 +340,7 @@ export default function App() {
     const hud = hudCanvasRef.current?.getContext('2d');
     const activeScreen = screenCacheRef.current[message.currentRoom];
     if (hud) {
-      if (activeScreen && staleRoom < 0) paintSpectrumHud(hud, activeScreen);
+      if (activeScreen && staleRoom < 0) paintSpectrumHud(hud, activeScreen, graphicsStyleRef.current);
       else if (staleRoom < 0) hud.clearRect(0, 0, 256, 48); 
     }
     
@@ -748,6 +783,15 @@ export default function App() {
             <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
           </div>
           <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
+          <button
+            className="keyboard-mode-button audio-style-button"
+            title={graphicsStyle === 'c64' ? 'Using C64 VIC-II graphics (click for ZX Spectrum palette)' : 'Using ZX Spectrum palette (click for C64 VIC-II graphics)'}
+            onClick={() => {
+              const next: GraphicsStyle = graphicsStyle === 'c64' ? 'spectrum' : 'c64';
+              graphicsStyleRef.current = next;
+              setGraphicsStyle(next);
+            }}
+          >{graphicsStyle === 'c64' ? 'GFX: C64' : 'GFX: ZX'}</button>
           <button
             className="keyboard-mode-button audio-style-button"
             title={audioStyle === 'c64' ? 'Using C64 SID-style audio (click for original 48K beeper)' : 'Using 48K Spectrum beeper (click for C64 SID-style audio)'}
