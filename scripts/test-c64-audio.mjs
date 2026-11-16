@@ -10,7 +10,7 @@ const { code } = transformSync(tsSource, { loader: 'ts', format: 'esm', target: 
 const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 const {
-  prepareC64FrameEvents,
+  detectC64Triggers,
   createSidSynthState,
   synthesizeC64Frame,
   renderSpectrumBeeperFrame,
@@ -29,56 +29,50 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
   return new Uint32Array(arr);
 }
 
-// 1. Border-only / idle writes must produce no toggles
+// 1. Border-only / idle writes trigger nothing
 {
   const state = createSidSynthState();
   const border = new Uint32Array([(938 << 8) | 0x00]);
-  assert.equal(prepareC64FrameEvents(border, state).toggles.length, 0);
+  assert.deepEqual(detectC64Triggers(border, undefined, state), []);
 
   const stray = makeEvents([33759], 5000, false);
-  assert.equal(prepareC64FrameEvents(stray, state).toggles.length, 0);
+  assert.deepEqual(detectC64Triggers(stray, undefined, state), []);
 }
 
-// 2. 50 Hz CPU-busy gap between consecutive active frames must be bridged seamlessly
+// 2. Multi-frame RAM SFX states trigger exact C64 presets
 {
   const state = createSidSynthState();
-  const f1 = makeEvents(Array(20).fill(1227), 44000, false);
-  const p1 = prepareC64FrameEvents(f1, state);
-  assert.equal(p1.endsNearBoundary, true);
+  // Laser shot: rem=5, step=-9 (0xf7)
+  const laserRam = new Uint8Array([0, 0, 5, 0xbf, 0xf7, 0xfb, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), laserRam, state), ['laser']);
 
-  // Next frame starts after ~43k cycle CPU draw gap with a close half-period (1367)
-  const f2 = makeEvents(Array(19).fill(1367), 43000, false);
-  const p2 = prepareC64FrameEvents(f2, state);
-  assert.ok(p2.toggles.length > 40, `expected bridged toggles across CPU gap, got ${p2.toggles.length}`);
-  assert.ok(p2.toggles[0].cycle < 2000, `expected gap fill starting near cycle 0, got ${p2.toggles[0].cycle}`);
+  // Holding same countdown does not retrigger mid-shot
+  const laserFrame2 = new Uint8Array([0, 0, 4, 0xb6, 0xf7, 0xfc, 1, 1]);
+  assert.deepEqual(detectC64Triggers(makeEvents(Array(15).fill(1367), 43000, false), laserFrame2, state), []);
+
+  // Platform drop: rem=2, step=+10 (0x0a)
+  const platRam = new Uint8Array([0, 0, 2, 0x82, 0x0a, 0x10, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), platRam, state), ['platform']);
+
+  // Big explosion: rem=63 (0x3f)
+  const expRam = new Uint8Array([0, 0, 0x3f, 0x00, 0x00, 0x1a, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), expRam, state), ['explosion_big']);
 }
 
-// 3. Short isolated burst stays short (not stretched across whole frame)
+// 3. Immediate 0xD7C0 bursts classify footsteps, pickups, and noisy hits
 {
   const state = createSidSynthState();
   const footstep = makeEvents([881, 1196, 1151, 1106], 34378, false);
-  const p = prepareC64FrameEvents(footstep, state);
-  assert.equal(p.isShortBurst, true);
+  assert.deepEqual(detectC64Triggers(footstep, new Uint8Array(8), state), ['footstep']);
 
-  const buf = new Float32Array(960);
-  synthesizeC64Frame(state, p, 48000, buf);
-  // First 8ms (384 samples) before 34378 cycles (~9.8ms) should be silent
-  const preRms = Math.sqrt(buf.slice(0, 380).reduce((a, b) => a + b * b, 0) / 380);
-  assert.ok(preRms < 0.0001, `expected silence before blip onset, got preRms=${preRms}`);
-  const activePeak = Math.max(...Array.from(buf.slice(460, 620), Math.abs));
-  assert.ok(activePeak > 0.02, `expected active blip peak, got ${activePeak}`);
+  const pickup = makeEvents([611, 566, 521, 476, 431, 386, 341, 296], 33000, false);
+  assert.deepEqual(detectC64Triggers(pickup, new Uint8Array(8), state), ['pickup']);
+
+  const hit = makeEvents([310, 1420, 240, 1890, 410, 1120, 290, 1640, 350, 980, 260, 1510, 390, 1200], 30000, false);
+  assert.deepEqual(detectC64Triggers(hit, new Uint8Array(8), state), ['explosion_small']);
 }
 
-// 4. Chaotic intervals trigger SID LFSR noise texture
-{
-  const state = createSidSynthState();
-  const noisy = makeEvents([310, 1420, 240, 1890, 410, 1120, 290, 1640, 350, 980, 260, 1510], 30000, false);
-  const p = prepareC64FrameEvents(noisy, state);
-  assert.equal(p.isNoise, true);
-  assert.ok(p.noiseClockHz >= 450);
-}
-
-// 5. End-to-end integration on live Starquake WASM frames: check bounded peaks & smooth frame boundaries
+// 4. End-to-end synthesis on live Starquake WASM frames
 {
   const wasmBytes = fs.readFileSync(path.join(root, 'public/z80-single.wasm'));
   const sna = fs.readFileSync(path.join(root, 'public/starquake.sna'));
@@ -98,22 +92,27 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
 
   const state = createSidSynthState();
   const sampleRate = 48000;
-  let activeFrames = 0;
+  let totalVoiceTriggers = 0;
   let maxPeak = 0;
   let prevLastSample = 0;
   let maxBoundaryJump = 0;
 
-  for (let f = 1; f <= 80; f++) {
+  for (let f = 1; f <= 120; f++) {
     if (f === 41) e.emu_set_key_row(7, 0xff & ~(1 << 2));
-    if (f === 56) e.emu_set_key_row(7, 0xff);
+    if (f === 65) { e.emu_set_key_row(7, 0xff); e.emu_set_key_row(2, 0xff & ~1); }
+    if (f === 90) { e.emu_set_key_row(2, 0xff); e.emu_set_key_row(1, 0xff & ~1); }
     e.emu_begin_frame();
     e.emu_tick_range(0, 512, 50, f, 2, 0, 15, 0, 31);
     const count = Math.min(4096, e.emu_audio_count());
     const events = count ? new Uint32Array(mem.buffer, e.emu_audio_ptr() >>> 0, count).slice() : new Uint32Array(0);
-    const prepared = prepareC64FrameEvents(events, state);
-    if (prepared.toggles.length) activeFrames++;
-    const out = new Float32Array(Math.round((sampleRate * prepared.totalCycles) / 3500000));
-    synthesizeC64Frame(state, prepared, sampleRate, out);
+    const ptr = e.emu_screen_ptr(e.emu_current_room()) >>> 0;
+    const sfxRam = new Uint8Array(mem.buffer, ptr + (0xa41b - 0x4000), 8).slice();
+
+    const out = new Float32Array(960);
+    const before = state.voices.length;
+    synthesizeC64Frame(state, events, sfxRam, sampleRate, out);
+    if (state.voices.length > before) totalVoiceTriggers++;
+
     maxBoundaryJump = Math.max(maxBoundaryJump, Math.abs(out[0] - prevLastSample));
     prevLastSample = out[out.length - 1];
     for (const s of out) {
@@ -121,9 +120,9 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
       maxPeak = Math.max(maxPeak, Math.abs(s));
     }
   }
-  assert.ok(activeFrames >= 10, `expected active Starquake frames, got ${activeFrames}`);
+  assert.ok(totalVoiceTriggers >= 5, `expected multiple SID voice triggers, got ${totalVoiceTriggers}`);
   assert.ok(maxPeak > 0.05 && maxPeak <= 0.95, `unexpected peak ${maxPeak}`);
-  assert.ok(maxBoundaryJump < 0.25, `unexpected frame-boundary discontinuity ${maxBoundaryJump}`);
+  assert.ok(maxBoundaryJump < 0.25, `unexpected boundary jump ${maxBoundaryJump}`);
 
   // Legacy spectrum renderer sanity check
   const bufSpec = new Float32Array(960);

@@ -25,10 +25,10 @@ type WorkerMessage =
   | { type: 'debug-captured'; captureId: number; capturedAt: string; room: number; pc: number; sp: number; writeTraceAvailable: boolean; writeCount: number; writeCapacity: number; ram: ArrayBuffer; writes: ArrayBuffer }
   | { type: 'begin-done'; frameId: number }
   | { type: 'tick-done'; frameId: number; workerIndex: number }
-  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
+  | { type: 'collected'; frameId: number; workerIndex: number; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; sfxState?: Uint8Array; currentRoom: number; gameOver: boolean; audioOverflow: boolean };
 
 type Camera = { scale: number; x: number; y: number };
-type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; currentRoom: number; gameOver: boolean };
+type FrameState = { id: number; phase: 'begin' | 'tick' | 'collect'; started: number; tickDone: Set<number>; collectDone: Set<number>; dirty: { room: number; screen: ArrayBuffer }[]; audioEvents: Uint32Array; audioLast: number; sfxState?: Uint8Array; currentRoom: number; gameOver: boolean };
 
 const INITIAL_KEYS = [255, 255, 255, 255, 255, 255, 255, 255];
 type GameAction = 'up' | 'down' | 'left' | 'right' | 'fire';
@@ -246,8 +246,8 @@ export default function App() {
     audioEngineRef.current?.stop();
   }
 
-  function playBeeper(events: Uint32Array, last: number) {
-    getAudioEngine().playFrame(events, last);
+  function playBeeper(events: Uint32Array, last: number, sfxState?: Uint8Array) {
+    getAudioEngine().playFrame(events, last, sfxState);
   }
 
   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
@@ -322,7 +322,7 @@ export default function App() {
       setStatus('Game over · all lives lost');
     }
 
-    if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
+    if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast, message.sfxState);
     if (message.gameOver && soundOnRef.current) {
       getAudioEngine().startHighscoreMusic();
     }
@@ -456,12 +456,12 @@ export default function App() {
     } else if (message.type === 'collected' && frame.phase === 'collect') {
       frame.collectDone.add(message.workerIndex);
       frame.dirty.push(...message.dirty);
-      if (message.workerIndex === 0) { frame.audioEvents = message.audioEvents; frame.audioLast = message.audioLast; }
+      if (message.workerIndex === 0) { frame.audioEvents = message.audioEvents; frame.audioLast = message.audioLast; frame.sfxState = message.sfxState; }
       frame.currentRoom = message.currentRoom;
       frame.gameOver = frame.gameOver || message.gameOver;
       if (frame.collectDone.size === workers.length) {
         const elapsed = performance.now() - frame.started;
-        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
+        drawFrame({ ...message, dirty: frame.dirty, audioEvents: frame.audioEvents, audioLast: frame.audioLast, sfxState: frame.sfxState, currentRoom: frame.currentRoom, gameOver: frame.gameOver });
         frameStateRef.current = null;
         if (playingRef.current) {
           const delay = Math.max(0, 20 - elapsed);
