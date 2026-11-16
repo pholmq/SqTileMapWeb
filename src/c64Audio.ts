@@ -3,60 +3,82 @@ export type AudioStyle = 'c64' | 'spectrum';
 export const SPECTRUM_CLOCK_HZ = 3_500_000;
 export const SPECTRUM_FRAME_CYCLES = 70_000;
 
-export interface ToggleEvent {
-  cycle: number;
-  level: boolean;
-}
+export type C64SfxPreset =
+  | 'laser'
+  | 'platform'
+  | 'footstep'
+  | 'pickup'
+  | 'hover_up'
+  | 'glide_down'
+  | 'chime'
+  | 'explosion_small'
+  | 'explosion_big';
 
-export interface PreparedC64Frame {
-  toggles: ToggleEvent[];
-  totalCycles: number;
-  startLevel: boolean;
-  endLevel: boolean;
-  activeStartCycle: number;
-  activeEndCycle: number;
-  medianHalfPeriod: number;
-  isNoise: boolean;
-  noiseClockHz: number;
-  isShortBurst: boolean;
-  endsNearBoundary: boolean;
+interface SidVoice {
+  active: boolean;
+  elapsedSec: number;
+  durationSec: number;
+  attackSec: number;
+  decaySec: number;
+  startFreq: number;
+  endFreq: number;
+  step2AtSec: number;
+  step2Freq: number;
+  vibratoHz: number;
+  vibratoDepthHz: number;
+  pulseMix: number;
+  triMix: number;
+  noiseMix: number;
+  duty: number;
+  noiseStartHz: number;
+  noiseEndHz: number;
+  filterStartHz: number;
+  filterEndHz: number;
+  filterQ: number;
+  gain: number;
+  phase: number;
+  noisePhase: number;
+  noiseSample: number;
+  lfsr: number;
+  svfLow: number;
+  svfBand: number;
 }
 
 export interface SidSynthState {
+  timeSec: number;
   lastRawLevel: boolean;
-  prevEndedActive: boolean;
-  prevMedianHalfPeriod: number;
-  activeEnv: number;
-  releaseTauSec: number;
-  tailPhase: number;
-  tailFreq: number;
-  hpPrevIn: number;
-  hpOut: number;
-  triState: number;
-  noisePhase: number;
-  lfsr: number;
-  noiseSample: number;
+  prevRemFrames: number;
+  prevStep: number;
+  cooldownUntil: Record<C64SfxPreset, number>;
+  voices: SidVoice[];
   // Legacy Spectrum beeper filter state
   spectrumLowPass: number;
   spectrumPreviousInput: number;
   spectrumHighPass: number;
 }
 
+function makeCooldowns(): Record<C64SfxPreset, number> {
+  return {
+    laser: 0,
+    platform: 0,
+    footstep: 0,
+    pickup: 0,
+    hover_up: 0,
+    glide_down: 0,
+    chime: 0,
+    explosion_small: 0,
+    explosion_big: 0,
+  };
+}
+
 export function createSidSynthState(): SidSynthState {
   return {
+    timeSec: 0,
     lastRawLevel: false,
-    prevEndedActive: false,
-    prevMedianHalfPeriod: 0,
-    activeEnv: 0,
-    releaseTauSec: 0.045,
-    tailPhase: 0,
-    tailFreq: 440,
-    hpPrevIn: 0,
-    hpOut: 0,
-    triState: 0,
-    noisePhase: 0,
-    lfsr: 0x7ffff8,
-    noiseSample: 0,
+    prevRemFrames: 0,
+    prevStep: 0,
+    cooldownUntil: makeCooldowns(),
+    voices: [],
     spectrumLowPass: 0,
     spectrumPreviousInput: 0,
     spectrumHighPass: 0,
@@ -67,18 +89,321 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+function polyBlep(phase: number, dt: number): number {
+  if (dt <= 0) return 0;
+  if (phase < dt) {
+    const t = phase / dt;
+    return t + t - t * t - 1;
+  }
+  if (phase > 1 - dt) {
+    const t = (phase - 1) / dt;
+    return t * t + t + t + 1;
+  }
+  return 0;
+}
+
+function stepSidLfsr(voice: SidVoice): number {
+  const bit22 = (voice.lfsr >>> 22) & 1;
+  const bit17 = (voice.lfsr >>> 17) & 1;
+  voice.lfsr = ((voice.lfsr << 1) | (bit22 ^ bit17)) & 0x7fffff;
+  if (voice.lfsr === 0) voice.lfsr = 0x7ffff8;
+  return (((voice.lfsr >>> 15) & 0xff) / 127.5) - 1;
+}
+
+function spawnVoice(state: SidSynthState, config: Omit<SidVoice, 'active' | 'elapsedSec' | 'phase' | 'noisePhase' | 'noiseSample' | 'lfsr' | 'svfLow' | 'svfBand'>) {
+  if (state.voices.length >= 8) {
+    // Steal oldest voice when polyphony limit is reached
+    state.voices.shift();
+  }
+  state.voices.push({
+    ...config,
+    active: true,
+    elapsedSec: 0,
+    phase: 0,
+    noisePhase: 0,
+    noiseSample: 0,
+    lfsr: 0x7ffff8,
+    svfLow: 0,
+    svfBand: 0,
+  });
+}
+
+export function triggerC64Preset(state: SidSynthState, preset: C64SfxPreset) {
+  const now = state.timeSec;
+  if (now < state.cooldownUntil[preset]) return;
+
+  switch (preset) {
+    case 'laser':
+      // Crisp C64 Starquake blaster zap: short noise snap + bright 1080 -> 340 Hz SID pulse sweep
+      state.cooldownUntil.laser = now + 0.085;
+      spawnVoice(state, {
+        durationSec: 0.25,
+        attackSec: 0.002,
+        decaySec: 0.21,
+        startFreq: 1080,
+        endFreq: 340,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.65,
+        triMix: 0.35,
+        noiseMix: 0,
+        duty: 0.32,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 3200,
+        filterEndHz: 1050,
+        filterQ: 1.5,
+        gain: 0.29,
+      });
+      spawnVoice(state, {
+        durationSec: 0.036,
+        attackSec: 0.001,
+        decaySec: 0.028,
+        startFreq: 420,
+        endFreq: 180,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0,
+        triMix: 0,
+        noiseMix: 1,
+        duty: 0.5,
+        noiseStartHz: 3600,
+        noiseEndHz: 1100,
+        filterStartHz: 3000,
+        filterEndHz: 950,
+        filterQ: 1.6,
+        gain: 0.17,
+      });
+      break;
+
+    case 'platform':
+      // Crisp rising octave chime (440 -> 880 Hz) as heard when deploying bridges
+      state.cooldownUntil.platform = now + 0.09;
+      spawnVoice(state, {
+        durationSec: 0.16,
+        attackSec: 0.002,
+        decaySec: 0.13,
+        startFreq: 440,
+        endFreq: 445,
+        step2AtSec: 0.055,
+        step2Freq: 880,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.74,
+        triMix: 0.26,
+        noiseMix: 0,
+        duty: 0.32,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 3000,
+        filterEndHz: 1900,
+        filterQ: 1.1,
+        gain: 0.26,
+      });
+      break;
+
+    case 'footstep':
+      // Punchy bassy SID "blup" footstep (220 -> 78 Hz in ~48 ms) matching C64 longplay
+      state.cooldownUntil.footstep = now + 0.095;
+      spawnVoice(state, {
+        durationSec: 0.062,
+        attackSec: 0.001,
+        decaySec: 0.048,
+        startFreq: 220,
+        endFreq: 78,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.35,
+        triMix: 0.65,
+        noiseMix: 0,
+        duty: 0.38,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 1100,
+        filterEndHz: 340,
+        filterQ: 1.3,
+        gain: 0.28,
+      });
+      break;
+
+    case 'pickup':
+      // Sparkly rising SID arpeggio chime (540 -> 1080 Hz)
+      state.cooldownUntil.pickup = now + 0.075;
+      spawnVoice(state, {
+        durationSec: 0.15,
+        attackSec: 0.002,
+        decaySec: 0.12,
+        startFreq: 540,
+        endFreq: 680,
+        step2AtSec: 0.045,
+        step2Freq: 1080,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.70,
+        triMix: 0.30,
+        noiseMix: 0,
+        duty: 0.30,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 3400,
+        filterEndHz: 2200,
+        filterQ: 1.0,
+        gain: 0.25,
+      });
+      break;
+
+    case 'hover_up':
+      // Bubbly C64 SID warble sweep (430 -> 980 Hz with 28 Hz vibrato)
+      state.cooldownUntil.hover_up = now + 0.16;
+      spawnVoice(state, {
+        durationSec: 0.25,
+        attackSec: 0.003,
+        decaySec: 0.20,
+        startFreq: 430,
+        endFreq: 980,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 28,
+        vibratoDepthHz: 62,
+        pulseMix: 0.68,
+        triMix: 0.32,
+        noiseMix: 0,
+        duty: 0.30,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 2900,
+        filterEndHz: 1500,
+        filterQ: 1.6,
+        gain: 0.24,
+      });
+      break;
+
+    case 'glide_down':
+      // Smooth sci-fi descending glide (900 -> 420 Hz with subtle 18 Hz shimmer)
+      state.cooldownUntil.glide_down = now + 0.17;
+      spawnVoice(state, {
+        durationSec: 0.29,
+        attackSec: 0.004,
+        decaySec: 0.25,
+        startFreq: 900,
+        endFreq: 420,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 18,
+        vibratoDepthHz: 18,
+        pulseMix: 0.56,
+        triMix: 0.44,
+        noiseMix: 0,
+        duty: 0.36,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 2600,
+        filterEndHz: 950,
+        filterQ: 1.3,
+        gain: 0.24,
+      });
+      break;
+
+    case 'chime':
+      // Clean two-note sci-fi SID chime (660 -> 880 Hz)
+      state.cooldownUntil.chime = now + 0.12;
+      spawnVoice(state, {
+        durationSec: 0.20,
+        attackSec: 0.002,
+        decaySec: 0.17,
+        startFreq: 660,
+        endFreq: 660,
+        step2AtSec: 0.06,
+        step2Freq: 880,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.64,
+        triMix: 0.36,
+        noiseMix: 0,
+        duty: 0.34,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 2800,
+        filterEndHz: 1600,
+        filterQ: 1.1,
+        gain: 0.24,
+      });
+      break;
+
+    case 'explosion_small':
+      // Crunchy short SID noise pop + bass punch
+      state.cooldownUntil.explosion_small = now + 0.095;
+      spawnVoice(state, {
+        durationSec: 0.17,
+        attackSec: 0.001,
+        decaySec: 0.14,
+        startFreq: 340,
+        endFreq: 95,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0,
+        triMix: 0.30,
+        noiseMix: 0.70,
+        duty: 0.5,
+        noiseStartHz: 3600,
+        noiseEndHz: 500,
+        filterStartHz: 2600,
+        filterEndHz: 320,
+        filterQ: 2.2,
+        gain: 0.32,
+      });
+      break;
+
+    case 'explosion_big':
+      // Deep sweeping C64 SID noise explosion + low sub boom
+      state.cooldownUntil.explosion_big = now + 0.20;
+      spawnVoice(state, {
+        durationSec: 0.46,
+        attackSec: 0.002,
+        decaySec: 0.36,
+        startFreq: 240,
+        endFreq: 52,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0,
+        triMix: 0.24,
+        noiseMix: 0.76,
+        duty: 0.5,
+        noiseStartHz: 4600,
+        noiseEndHz: 340,
+        filterStartHz: 3400,
+        filterEndHz: 180,
+        filterQ: 2.6,
+        gain: 0.38,
+      });
+      break;
+  }
+}
+
 /**
- * Extracts exact bit-4 toggles from one frame of port 0xFE writes, suppresses
- * border-only writes, and bridges 50 Hz Z80 sprite-draw gaps inside continuous sounds.
+ * Inspects Spectrum RAM (0xA41B..0xA422) and port 0xFE toggles to detect exact
+ * Starquake gameplay sound triggers and return which C64 SID presets should fire.
  */
-export function prepareC64FrameEvents(
+export function detectC64Triggers(
   events: Uint32Array,
-  state: Pick<SidSynthState, 'lastRawLevel' | 'prevEndedActive' | 'prevMedianHalfPeriod'>,
-): PreparedC64Frame {
+  sfxRam: Uint8Array | undefined,
+  state: SidSynthState,
+): C64SfxPreset[] {
+  const triggered: C64SfxPreset[] = [];
   let level = state.lastRawLevel;
   let cycleOffset = 0;
   let previousCycle = -1;
-  const rawToggles: ToggleEvent[] = [];
+  const toggles: number[] = [];
 
   for (let i = 0; i < events.length; i++) {
     const raw = events[i];
@@ -90,261 +415,192 @@ export function prepareC64FrameEvents(
     previousCycle = cycle;
     const bit = (raw & 0x10) !== 0;
     if (bit !== level) {
-      rawToggles.push({ cycle: absCycle, level: bit });
+      toggles.push(absCycle);
       level = bit;
     }
   }
-
-  const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
-
-  // Ignore 0 or 1 toggle frames (border writes / static level)
-  if (rawToggles.length < 2) {
-    state.lastRawLevel = level;
-    state.prevEndedActive = false;
-    return {
-      toggles: [],
-      totalCycles,
-      startLevel: level,
-      endLevel: level,
-      activeStartCycle: 0,
-      activeEndCycle: 0,
-      medianHalfPeriod: 0,
-      isNoise: false,
-      noiseClockHz: 0,
-      isShortBurst: false,
-      endsNearBoundary: false,
-    };
-  }
-
-  // Single isolated toggle pair spanning >18,000 cycles is a border/init pulse, not audio
-  if (rawToggles.length === 2 && rawToggles[1].cycle - rawToggles[0].cycle > 18_000) {
-    state.lastRawLevel = level;
-    state.prevEndedActive = false;
-    return {
-      toggles: [],
-      totalCycles,
-      startLevel: level,
-      endLevel: level,
-      activeStartCycle: 0,
-      activeEndCycle: 0,
-      medianHalfPeriod: 0,
-      isNoise: false,
-      noiseClockHz: 0,
-      isShortBurst: false,
-      endsNearBoundary: false,
-    };
-  }
-
-  const activeInts: number[] = [];
-  for (let i = 1; i < rawToggles.length; i++) {
-    const dt = rawToggles[i].cycle - rawToggles[i - 1].cycle;
-    if (dt >= 40 && dt <= 8000) activeInts.push(dt);
-  }
-  const sorted = [...activeInts].sort((a, b) => a - b);
-  const medianHalfPeriod = sorted.length ? sorted[Math.floor(sorted.length * 0.5)] : 0;
-
-  let isNoise = false;
-  let noiseClockHz = 0;
-  if (activeInts.length >= 6 && medianHalfPeriod > 0) {
-    let sum = 0;
-    for (let i = 0; i < activeInts.length; i++) sum += activeInts[i];
-    const mean = sum / activeInts.length;
-    let variance = 0;
-    let signChanges = 0;
-    let prevDiff = 0;
-    for (let i = 0; i < activeInts.length; i++) {
-      const d = activeInts[i] - mean;
-      variance += d * d;
-      if (i > 0) {
-        const diff = activeInts[i] - activeInts[i - 1];
-        if (i > 1 && ((diff > 0 && prevDiff < 0) || (diff < 0 && prevDiff > 0))) signChanges++;
-        if (diff !== 0) prevDiff = diff;
-      }
-    }
-    const cv = Math.sqrt(variance / activeInts.length) / mean;
-    const signRatio = activeInts.length > 2 ? signChanges / (activeInts.length - 2) : 0;
-    if (cv >= 0.28 && signRatio >= 0.35) {
-      isNoise = true;
-      noiseClockHz = clamp(SPECTRUM_CLOCK_HZ / Math.max(180, mean * 1.4), 450, 7500);
-    }
-  }
-
-  let toggles = rawToggles;
-  let startLevel = state.lastRawLevel;
-  const endsNearBoundary =
-    rawToggles.length >= 4 &&
-    rawToggles[rawToggles.length - 1].cycle >= totalCycles - 8000;
-  const startsAfterCpuGap =
-    rawToggles.length >= 4 &&
-    rawToggles[0].cycle >= 10_000 &&
-    medianHalfPeriod > 0;
-
-  // Bridge the ~10ms Z80 sprite-draw pause during continuous multi-frame sounds
-  // so 50 Hz Spectrum chop becomes a smooth, continuous C64 SID sweep.
-  if (
-    state.prevEndedActive &&
-    startsAfterCpuGap &&
-    state.prevMedianHalfPeriod > 0
-  ) {
-    const ratio =
-      Math.max(state.prevMedianHalfPeriod, medianHalfPeriod) /
-      Math.min(state.prevMedianHalfPeriod, medianHalfPeriod);
-    if (ratio <= 1.55) {
-      const synthetic: ToggleEvent[] = [];
-      let c = rawToggles[0].cycle;
-      let lv = rawToggles[0].level;
-      const stepStart = state.prevMedianHalfPeriod;
-      const stepEnd = medianHalfPeriod;
-      while (c > stepEnd * 0.25) {
-        const frac = c / rawToggles[0].cycle;
-        const dt = Math.max(40, stepStart + (stepEnd - stepStart) * frac);
-        c -= dt;
-        if (c >= 0) {
-          lv = !lv;
-          synthetic.push({ cycle: c, level: lv });
-        }
-      }
-      synthetic.reverse();
-      if (synthetic.length > 0) {
-        startLevel = !synthetic[0].level;
-        toggles = [...synthetic, ...rawToggles];
-      }
-    }
-  }
-
-  const activeStartCycle = toggles[0].cycle;
-  const activeEndCycle = toggles[toggles.length - 1].cycle;
-  const isShortBurst = rawToggles.length <= 12 && (activeEndCycle - activeStartCycle) < 14_000;
-
   state.lastRawLevel = level;
-  state.prevEndedActive = endsNearBoundary && medianHalfPeriod > 0;
-  state.prevMedianHalfPeriod = medianHalfPeriod;
 
-  return {
-    toggles,
-    totalCycles,
-    startLevel,
-    endLevel: level,
-    activeStartCycle,
-    activeEndCycle,
-    medianHalfPeriod,
-    isNoise,
-    noiseClockHz,
-    isShortBurst,
-    endsNearBoundary,
-  };
-}
+  // 1. Multi-frame SFX table triggers from active-room RAM 0xA41B..0xA422
+  const prevRem = state.prevRemFrames;
+  let rem = 0;
+  if (sfxRam && sfxRam.length >= 7) {
+    rem = sfxRam[2]; // 0xA41D: remaining frames
+    const stepRaw = sfxRam[4]; // 0xA41F: signed pitch delta
+    const step = stepRaw > 127 ? stepRaw - 256 : stepRaw;
 
-function stepSidLfsr(state: SidSynthState): number {
-  const bit22 = (state.lfsr >>> 22) & 1;
-  const bit17 = (state.lfsr >>> 17) & 1;
-  state.lfsr = ((state.lfsr << 1) | (bit22 ^ bit17)) & 0x7fffff;
-  if (state.lfsr === 0) state.lfsr = 0x7ffff8;
-  return (((state.lfsr >>> 15) & 0xff) / 127.5) - 1;
+    const newRamSound =
+      rem > 0 &&
+      (rem > prevRem || prevRem === 0 || step !== state.prevStep);
+
+    if (newRamSound) {
+      if (step === -9 && rem <= 8) {
+        triggered.push('laser');
+      } else if (step === 10 && rem <= 5) {
+        triggered.push('platform');
+      } else if (rem >= 25) {
+        triggered.push('explosion_big');
+      } else if (step < 0) {
+        triggered.push('hover_up');
+      } else if (step > 0) {
+        triggered.push('glide_down');
+      } else {
+        triggered.push('chime');
+      }
+    }
+    state.prevRemFrames = rem;
+    state.prevStep = step;
+  } else {
+    state.prevRemFrames = 0;
+  }
+
+  // 2. Immediate 0xD7C0 SFX bursts from port 0xFE toggle signatures
+  const hasRealBurst =
+    toggles.length >= 3 ||
+    (toggles.length === 2 && toggles[1] - toggles[0] <= 18_000);
+
+  // Skip toggles that belong to the already-handled 0xA5BE multi-frame tone loop (including its final rem==0 frame)
+  const isOnlyA5beWindow = (rem > 0 || prevRem > 0) && toggles.length > 0 && toggles[0] >= 18_000;
+
+  if (hasRealBurst && !isOnlyA5beWindow) {
+    const intervals: number[] = [];
+    for (let i = 1; i < toggles.length; i++) {
+      const dt = toggles[i] - toggles[i - 1];
+      if (dt >= 40 && dt <= 16_000) intervals.push(dt);
+    }
+
+    if (intervals.length > 0) {
+      const span = toggles[toggles.length - 1] - toggles[0];
+      let sum = 0;
+      for (const dt of intervals) sum += dt;
+      const mean = sum / intervals.length;
+      let variance = 0;
+      for (const dt of intervals) variance += (dt - mean) * (dt - mean);
+      const cv = mean > 0 ? Math.sqrt(variance / intervals.length) / mean : 0;
+
+      const head = intervals[0];
+      const tail = intervals[intervals.length - 1];
+
+      if (toggles.length <= 10 && span < 14_000 && mean >= 600) {
+        triggered.push('footstep');
+      } else if (toggles.length <= 28 && span < 18_000 && tail < head * 0.72) {
+        triggered.push('pickup');
+      } else if (cv >= 0.26 && intervals.length >= 12) {
+        triggered.push(intervals.length >= 55 ? 'explosion_big' : 'explosion_small');
+      } else if (intervals.length >= 6) {
+        triggered.push(tail < head * 0.85 ? 'chime' : 'glide_down');
+      }
+    }
+  }
+
+  return triggered;
 }
 
 /**
- * Renders one frame of cycle-accurate C64 6581 SID-shaped audio into `out`.
- * Preserves exact timing and rhythm while eliminating 50 Hz gaps and harsh 1-bit buzz.
+ * Renders `sampleCount` samples of the active polyphonic 6581 SID voices into `out`.
  */
 export function synthesizeC64Frame(
   state: SidSynthState,
-  frame: PreparedC64Frame,
+  events: Uint32Array,
+  sfxRam: Uint8Array | undefined,
   sampleRate: number,
   out: Float32Array,
 ): void {
-  const sampleCount = out.length;
-  const hasAudio = frame.toggles.length > 0;
+  const presets = detectC64Triggers(events, sfxRam, state);
+  for (const preset of presets) {
+    triggerC64Preset(state, preset);
+  }
 
-  if (!hasAudio && state.activeEnv <= 0.0004 && Math.abs(state.triState) <= 0.0004 && Math.abs(state.hpOut) <= 0.0004) {
+  const count = out.length;
+  const dtSec = 1 / sampleRate;
+
+  if (state.voices.length === 0) {
     out.fill(0);
-    state.activeEnv = 0;
-    state.triState = 0;
-    state.hpOut = 0;
+    state.timeSec += count * dtSec;
     return;
   }
 
-  const dtSec = 1 / sampleRate;
-  const sampleCycles = frame.totalCycles / sampleCount;
-  const attackCoef = 1 - Math.exp(-dtSec / 0.0015);
-  if (hasAudio) {
-    state.releaseTauSec = frame.isShortBurst ? 0.016 : 0.048;
-    if (frame.medianHalfPeriod > 0) {
-      state.tailFreq = clamp(SPECTRUM_CLOCK_HZ / (2 * frame.medianHalfPeriod), 55, 2200);
-    }
-  }
-  const releaseCoef = Math.exp(-dtSec / state.releaseTauSec);
-  const hpCoef = Math.exp((-2 * Math.PI * 34) / sampleRate);
-  const triDecay = Math.exp((-2 * Math.PI * 520) / sampleRate);
+  for (let i = 0; i < count; i++) {
+    let mix = 0;
+    for (let v = 0; v < state.voices.length; v++) {
+      const voice = state.voices[v];
+      if (!voice.active) continue;
 
-  const gateEndCycle = hasAudio
-    ? (frame.endsNearBoundary ? frame.totalCycles : frame.activeEndCycle + Math.min(2500, Math.max(400, frame.medianHalfPeriod * 1.5)))
-    : -1;
-
-  let level = frame.startLevel;
-  let toggleIdx = 0;
-  const toggles = frame.toggles;
-  let nextCycle = toggles.length ? toggles[0].cycle : Infinity;
-
-  for (let sample = 0; sample < sampleCount; sample++) {
-    const sampleStart = sample * sampleCycles;
-    const sampleEnd = (sample + 1) * sampleCycles;
-    const sampleMid = (sampleStart + sampleEnd) * 0.5;
-
-    while (toggleIdx < toggles.length && nextCycle <= sampleStart) {
-      level = toggles[toggleIdx].level;
-      toggleIdx++;
-      nextCycle = toggleIdx < toggles.length ? toggles[toggleIdx].cycle : Infinity;
-    }
-
-    let cursor = sampleStart;
-    let area = 0;
-    while (toggleIdx < toggles.length && nextCycle < sampleEnd) {
-      area += (nextCycle - cursor) * (level ? 1 : -1);
-      cursor = nextCycle;
-      level = toggles[toggleIdx].level;
-      toggleIdx++;
-      nextCycle = toggleIdx < toggles.length ? toggles[toggleIdx].cycle : Infinity;
-    }
-    area += (sampleEnd - cursor) * (level ? 1 : -1);
-
-    const isGateOpen = hasAudio && sampleMid >= frame.activeStartCycle && sampleMid <= gateEndCycle;
-    if (isGateOpen) {
-      state.activeEnv += attackCoef * (1 - state.activeEnv);
-    } else {
-      state.activeEnv *= releaseCoef;
-    }
-
-    let rawSq = area / sampleCycles;
-
-    // During release tail after toggles stop, smoothly ring out with soft decaying pulse/triangle
-    if (!isGateOpen && state.activeEnv > 0.001) {
-      state.tailPhase = (state.tailPhase + state.tailFreq / sampleRate) % 1;
-      const tailWave = state.tailPhase < 0.42 ? 1 : -1;
-      rawSq = rawSq * 0.15 + tailWave * 0.85;
-    }
-
-    // DC-blocking high-pass
-    state.hpOut = rawSq - state.hpPrevIn + hpCoef * state.hpOut;
-    state.hpPrevIn = rawSq;
-
-    // Warm 6581 pulse + integrated triangle blend with subtle even-harmonic asymmetry
-    state.triState = state.triState * triDecay + state.hpOut * (1 - triDecay);
-    const sidWave = 0.50 * state.hpOut + 0.50 * state.triState + 0.07 * state.hpOut * Math.abs(state.triState);
-
-    let signal = sidWave;
-    if (frame.isNoise && isGateOpen) {
-      state.noisePhase += frame.noiseClockHz / sampleRate;
-      while (state.noisePhase >= 1) {
-        state.noisePhase -= 1;
-        state.noiseSample = stepSidLfsr(state);
+      const t = voice.elapsedSec;
+      if (t >= voice.durationSec) {
+        voice.active = false;
+        continue;
       }
-      signal = sidWave * 0.78 + state.noiseSample * 0.22;
+
+      const progress = clamp(t / voice.durationSec, 0, 1);
+      let env: number;
+      if (t < voice.attackSec) {
+        env = t / Math.max(0.0002, voice.attackSec);
+      } else {
+        const decayTime = t - voice.attackSec;
+        env = Math.exp(-decayTime / Math.max(0.005, voice.decaySec * 0.45));
+      }
+      if (progress > 0.9) {
+        env *= (1 - progress) / 0.1;
+      }
+
+      let freq = voice.startFreq + (voice.endFreq - voice.startFreq) * Math.pow(progress, 0.75);
+      if (voice.step2AtSec > 0 && t >= voice.step2AtSec) {
+        freq = voice.step2Freq;
+      }
+      if (voice.vibratoHz > 0 && voice.vibratoDepthHz > 0) {
+        freq += voice.vibratoDepthHz * Math.sin(2 * Math.PI * voice.vibratoHz * t);
+      }
+      freq = clamp(freq, 40, 4000);
+
+      let oscSample = 0;
+      if (voice.pulseMix > 0 || voice.triMix > 0) {
+        const phaseInc = freq / sampleRate;
+        voice.phase = (voice.phase + phaseInc) % 1;
+        let pulse = 0;
+        if (voice.pulseMix > 0) {
+          pulse = voice.phase < voice.duty ? 1 : -1;
+          pulse -= polyBlep(voice.phase, phaseInc);
+          pulse += polyBlep((voice.phase - voice.duty + 1) % 1, phaseInc);
+        }
+        let tri = 0;
+        if (voice.triMix > 0) {
+          tri = 1 - 4 * Math.abs(voice.phase - 0.5);
+        }
+        oscSample = pulse * voice.pulseMix + tri * voice.triMix;
+      }
+
+      if (voice.noiseMix > 0) {
+        const noiseHz = voice.noiseStartHz + (voice.noiseEndHz - voice.noiseStartHz) * progress;
+        voice.noisePhase += clamp(noiseHz, 120, 10000) / sampleRate;
+        while (voice.noisePhase >= 1) {
+          voice.noisePhase -= 1;
+          voice.noiseSample = stepSidLfsr(voice);
+        }
+        oscSample = oscSample * (1 - voice.noiseMix) + voice.noiseSample * voice.noiseMix;
+      }
+
+      // Per-voice 6581 Chamberlin state-variable low-pass filter sweep
+      const cutoffHz = clamp(
+        voice.filterStartHz + (voice.filterEndHz - voice.filterStartHz) * progress,
+        120,
+        sampleRate * 0.42,
+      );
+      const f = 2 * Math.sin((Math.PI * cutoffHz) / sampleRate);
+      const q = 1 / Math.max(0.5, voice.filterQ);
+      const high = oscSample - voice.svfLow - q * voice.svfBand;
+      voice.svfBand += f * high;
+      voice.svfLow += f * voice.svfBand;
+
+      mix += voice.svfLow * env * voice.gain;
+      voice.elapsedSec += dtSec;
     }
 
-    const soft = Math.tanh(signal * 1.15);
-    out[sample] = clamp(soft * state.activeEnv * 0.22, -0.95, 0.95);
+    out[i] = clamp(Math.tanh(mix * 1.1), -0.95, 0.95);
   }
+
+  state.voices = state.voices.filter(v => v.active);
+  state.timeSec += count * dtSec;
 }
 
 /**
@@ -427,8 +683,7 @@ function createSidPulseWave(context: AudioContext, duty = 0.36): PeriodicWave {
   const real = new Float32Array(harmonics + 1);
   const imag = new Float32Array(harmonics + 1);
   for (let n = 1; n <= harmonics; n++) {
-    // Bandlimited pulse wave Fourier series with gentle 6581 high-harmonic roll-off
-    const rolloff = 1 / (1 + (n / 10) * (n / 10));
+    const rolloff = 1 / (1 + (n / 12) * (n / 12));
     imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty) * rolloff;
   }
   return context.createPeriodicWave(real, imag, { disableNormalization: false });
@@ -487,53 +742,46 @@ export class C64AudioEngine {
     this.synthState = createSidSynthState();
     this.sidPulseWave = createSidPulseWave(context, 0.36);
 
-    // Warm 6581 SID bus: low-mid body + smooth 1850 Hz 2-pole LPF + subtle stereo cavern echo
     const c64BusInput = context.createGain();
     c64BusInput.gain.value = this.style === 'c64' ? 1 : 0;
 
-    const bodyShelf = context.createBiquadFilter();
-    bodyShelf.type = 'lowshelf';
-    bodyShelf.frequency.value = 300;
-    bodyShelf.gain.value = 3.0;
-
     const sidLowpass = context.createBiquadFilter();
     sidLowpass.type = 'lowpass';
-    sidLowpass.frequency.value = 1850;
+    sidLowpass.frequency.value = 3200;
     sidLowpass.Q.value = 0.85;
 
     const dryGain = context.createGain();
-    dryGain.gain.value = 0.86;
+    dryGain.gain.value = 0.88;
 
     const delayL = context.createDelay(0.5);
-    delayL.delayTime.value = 0.088;
+    delayL.delayTime.value = 0.095;
     const delayR = context.createDelay(0.5);
-    delayR.delayTime.value = 0.142;
+    delayR.delayTime.value = 0.148;
     const echoLpL = context.createBiquadFilter();
     echoLpL.type = 'lowpass';
-    echoLpL.frequency.value = 1450;
+    echoLpL.frequency.value = 1750;
     const echoLpR = context.createBiquadFilter();
     echoLpR.type = 'lowpass';
-    echoLpR.frequency.value = 1350;
+    echoLpR.frequency.value = 1600;
     const echoFbL = context.createGain();
-    echoFbL.gain.value = 0.14;
+    echoFbL.gain.value = 0.13;
     const echoFbR = context.createGain();
-    echoFbR.gain.value = 0.14;
+    echoFbR.gain.value = 0.13;
     const echoMerger = context.createChannelMerger(2);
     const echoWet = context.createGain();
-    echoWet.gain.value = 0.17;
+    echoWet.gain.value = 0.15;
 
     const compressor = context.createDynamicsCompressor();
-    compressor.threshold.value = -12;
+    compressor.threshold.value = -10;
     compressor.knee.value = 10;
     compressor.ratio.value = 3.5;
-    compressor.attack.value = 0.004;
+    compressor.attack.value = 0.003;
     compressor.release.value = 0.10;
 
     const masterGain = context.createGain();
-    masterGain.gain.value = 0.90;
+    masterGain.gain.value = 0.92;
 
-    c64BusInput.connect(bodyShelf);
-    bodyShelf.connect(sidLowpass);
+    c64BusInput.connect(sidLowpass);
     sidLowpass.connect(dryGain);
     dryGain.connect(compressor);
 
@@ -613,24 +861,21 @@ export class C64AudioEngine {
     if (this.context) {
       this.nextTime = this.context.currentTime + 0.015;
     }
-    this.synthState.activeEnv = 0;
-    this.synthState.prevEndedActive = false;
-    this.synthState.triState = 0;
-    this.synthState.hpOut = 0;
+    this.synthState.voices = [];
+    this.synthState.prevRemFrames = 0;
+    this.synthState.prevStep = 0;
   }
 
-  playFrame(events: Uint32Array, lastByte: number) {
+  playFrame(events: Uint32Array, lastByte: number, sfxRam?: Uint8Array) {
     const context = this.context;
     if (!context) return;
 
     const sampleRate = context.sampleRate;
-    const prepared = this.style === 'c64' ? prepareC64FrameEvents(events, this.synthState) : null;
-    const totalCycles = prepared ? prepared.totalCycles : SPECTRUM_FRAME_CYCLES;
-    const sampleCount = Math.max(1, Math.round((sampleRate * totalCycles) / SPECTRUM_CLOCK_HZ));
+    const sampleCount = Math.max(1, Math.round((sampleRate * SPECTRUM_FRAME_CYCLES) / SPECTRUM_CLOCK_HZ));
     const samples = new Float32Array(sampleCount);
 
-    if (this.style === 'c64' && prepared) {
-      synthesizeC64Frame(this.synthState, prepared, sampleRate, samples);
+    if (this.style === 'c64') {
+      synthesizeC64Frame(this.synthState, events, sfxRam, sampleRate, samples);
     } else {
       renderSpectrumBeeperFrame(this.synthState, events, lastByte, sampleRate, samples);
     }
@@ -640,7 +885,6 @@ export class C64AudioEngine {
       return;
     }
 
-    // Fallback when AudioWorklet isn't available yet
     const frameDuration = sampleCount / sampleRate;
     const buffer = context.createBuffer(1, sampleCount, sampleRate);
     buffer.copyToChannel(samples, 0);
