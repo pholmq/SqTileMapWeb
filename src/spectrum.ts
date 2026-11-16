@@ -34,16 +34,16 @@ function abgr(c: readonly [number, number, number]): number {
   return (255 << 24) | (c[2] << 16) | (c[1] << 8) | c[0];
 }
 
-function mapC64Playfield(isBright: number, col: number): readonly [readonly [number, number, number], readonly [number, number, number]] {
+function mapC64Playfield(isBright: number, col: number): readonly [number, number, number] {
   switch (col) {
-    case 0: return [C64.BLACK, C64.BLACK];
-    case 1: return [C64.LIGHT_BLUE, C64.BLUE];
-    case 2: return [C64.LIGHT_RED, C64.RED];
-    case 3: return [C64.LIGHT_BLUE, C64.BLUE];
-    case 4: return [C64.LIGHT_GREEN, C64.GREEN];
-    case 5: return [C64.CYAN, C64.BLUE];
-    case 6: return isBright ? [C64.YELLOW, C64.ORANGE] : [C64.LIGHT_BLUE, C64.BLUE];
-    default: return isBright ? [C64.WHITE, C64.LIGHT_RED] : [C64.LIGHT_GREY, C64.DARK_GREY];
+    case 0: return C64.BLACK;
+    case 1: return isBright ? C64.LIGHT_BLUE : C64.BLUE;
+    case 2: return isBright ? C64.LIGHT_RED : C64.RED;
+    case 3: return C64.LIGHT_BLUE; // Spectrum magenta walls/platforms -> C64 lavender-blue
+    case 4: return isBright ? C64.LIGHT_GREEN : C64.GREEN;
+    case 5: return C64.CYAN;
+    case 6: return isBright ? C64.YELLOW : C64.LIGHT_BLUE; // Grass/terrain -> lavender-blue; bright highlights -> C64 yellow
+    default: return isBright ? C64.WHITE : C64.LIGHT_GREY;
   }
 }
 
@@ -84,11 +84,8 @@ for (let flash = 0; flash < 2; flash++) {
     const paper = (attr >> 3) & 7;
     const swap = flash && (attr & 0x80) !== 0;
 
-    const [pfInkMain, pfInkShade] = mapC64Playfield(isBright, swap ? paper : ink);
-    const [pfPaperMain] = mapC64Playfield(isBright, swap ? ink : paper);
-    const pfInkMainPx = abgr(pfInkMain);
-    const pfInkShadePx = abgr(pfInkShade);
-    const pfPaperPx = abgr(pfPaperMain);
+    const pfInkPx = abgr(mapC64Playfield(isBright, ink));
+    const pfPaperPx = abgr(mapC64Playfield(isBright, paper));
 
     const hudInkPx = abgr(mapC64Hud(flash, ink));
     const hudPaperPx = abgr(mapC64Hud(flash, paper));
@@ -101,17 +98,8 @@ for (let flash = 0; flash < 2; flash++) {
         const set = ((bitmap >> (7 - bit)) & 1) !== 0;
         const colour = colours[set !== Boolean(swap) ? ink : paper];
         pixelLookup[pixelBase + bit] = (255 << 24) | (colour[2] << 16) | (colour[1] << 8) | colour[0];
+        c64PlayfieldLookup[pixelBase + bit] = (set !== Boolean(swap)) ? pfInkPx : pfPaperPx;
         c64HudLookup[pixelBase + bit] = set ? hudInkPx : hudPaperPx;
-      }
-
-      // 2-bit horizontal pixel pairs give C64 160x200 multicolor shading on the playfield
-      for (let pair = 0; pair < 4; pair++) {
-        const b0 = (bitmap >> (7 - pair * 2)) & 1;
-        const b1 = (bitmap >> (6 - pair * 2)) & 1;
-        const bits = (b0 << 1) | b1;
-        const px = bits === 0 ? pfPaperPx : bits === 3 ? pfInkMainPx : pfInkShadePx;
-        c64PlayfieldLookup[pixelBase + pair * 2] = px;
-        c64PlayfieldLookup[pixelBase + pair * 2 + 1] = px;
       }
     }
   }
