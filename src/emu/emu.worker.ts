@@ -81,12 +81,19 @@ function collect(frameId: number, forceRoom = -1) {
   }
   let audioEvents = new Uint32Array(0);
   let audioLast = 0;
+  let sfxState = new Uint8Array(0);
+  const currentRoom = e.emu_current_room();
   if (workerIndex === 0) {
     const count = Math.min(4096, e.emu_audio_count());
     if (count) audioEvents = new Uint32Array(memory.buffer, e.emu_audio_ptr() >>> 0, count).slice();
     audioLast = e.emu_audio_last();
+    const activePtr = e.emu_screen_ptr(currentRoom) >>> 0;
+    const sfxOffset = activePtr + (0xa41b - 0x4000);
+    if (activePtr && sfxOffset + 8 <= heap.byteLength) {
+      sfxState = heap.slice(sfxOffset, sfxOffset + 8);
+    }
   }
-  scope.postMessage({ type: 'collected', frameId, workerIndex, dirty, audioEvents, audioLast, currentRoom: e.emu_current_room(), gameOver: workerIndex === 0 && typeof e.emu_game_over === 'function' && e.emu_game_over() !== 0, audioOverflow: workerIndex === 0 && e.emu_audio_overflowed() !== 0 }, [...dirty.map(x => x.screen), audioEvents.buffer as ArrayBuffer]);
+  scope.postMessage({ type: 'collected', frameId, workerIndex, dirty, audioEvents, audioLast, sfxState, currentRoom, gameOver: workerIndex === 0 && typeof e.emu_game_over === 'function' && e.emu_game_over() !== 0, audioOverflow: workerIndex === 0 && e.emu_audio_overflowed() !== 0 }, [...dirty.map(x => x.screen), audioEvents.buffer as ArrayBuffer, sfxState.buffer as ArrayBuffer]);
 }
 
 scope.onmessage = (event: MessageEvent<Incoming>) => {

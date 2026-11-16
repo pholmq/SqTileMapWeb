@@ -10,7 +10,7 @@ const { code } = transformSync(tsSource, { loader: 'ts', format: 'esm', target: 
 const mod = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
 
 const {
-  analyzeSpectrumFrame,
+  detectC64Triggers,
   createSidSynthState,
   synthesizeC64Frame,
   renderSpectrumBeeperFrame,
@@ -29,93 +29,50 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
   return new Uint32Array(arr);
 }
 
-// 1. Border-only / idle writes must be silent
+// 1. Border-only / idle writes trigger nothing
 {
+  const state = createSidSynthState();
   const border = new Uint32Array([(938 << 8) | 0x00]);
-  const res = analyzeSpectrumFrame(border, false);
-  assert.equal(res.kind, 'silent');
+  assert.deepEqual(detectC64Triggers(border, undefined, state), []);
 
   const stray = makeEvents([33759], 5000, false);
-  const strayRes = analyzeSpectrumFrame(stray, false);
-  assert.equal(strayRes.kind, 'silent');
+  assert.deepEqual(detectC64Triggers(stray, undefined, state), []);
 }
 
-// 2. 50Hz CPU-busy frame gap (0xA5BE pattern) must be stripped so true pitch is preserved
+// 2. Multi-frame RAM SFX states trigger exact C64 presets
 {
-  const ev = makeEvents([8587, 1227, 1227, 1227, 1227, 1227, 1227, 1227], 1000, false);
-  const res = analyzeSpectrumFrame(ev, false);
-  assert.equal(res.kind, 'tone');
-  const expectedHz = 3500000 / (2 * 1227);
-  assert.ok(Math.abs(res.startFreq - expectedHz) < 5, `expected ~${expectedHz}, got ${res.startFreq}`);
-  assert.ok(Math.abs(res.endFreq - expectedHz) < 5);
-}
-
-// 3. Monotonic upward pitch sweep must remain 'tone' with rising endFreq > startFreq
-{
-  const ev = makeEvents([611, 566, 521, 476, 431, 386, 341, 296], 32000, false);
-  const res = analyzeSpectrumFrame(ev, false);
-  assert.equal(res.kind, 'tone');
-  assert.ok(res.endFreq > res.startFreq, `expected rising sweep, got ${res.startFreq} -> ${res.endFreq}`);
-
-  const evMid = makeEvents([1400, 1250, 1100, 950, 800, 650, 550, 500], 32000, false);
-  const resMid = analyzeSpectrumFrame(evMid, false);
-  assert.equal(resMid.kind, 'tone');
-  assert.ok(resMid.endFreq > resMid.startFreq * 1.4, `expected rising mid sweep, got ${resMid.startFreq} -> ${resMid.endFreq}`);
-}
-
-// 4. Short footstep burst must classify as 'blip'
-{
-  const ev = makeEvents([881, 1196, 1151, 1106], 31670, false);
-  const res = analyzeSpectrumFrame(ev, false);
-  assert.equal(res.kind, 'blip');
-}
-
-// 5. Chaotic / jittery interval burst must classify as 'noise'
-{
-  const ev = makeEvents([310, 1420, 240, 1890, 410, 1120, 290, 1640, 350, 980, 260, 1510], 30000, false);
-  const res = analyzeSpectrumFrame(ev, false);
-  assert.equal(res.kind, 'noise');
-  assert.ok(res.noiseMix >= 0.45 && res.noiseClockHz > 400);
-}
-
-// 6. Asymmetric pulse-width intervals should extract non-0.5 duty cycle
-{
-  const ev = makeEvents([2300, 1500, 2300, 1500, 2300, 1500, 2300, 1500], 33000, false);
-  const res = analyzeSpectrumFrame(ev, false);
-  assert.equal(res.kind, 'tone');
-  assert.ok(Math.abs(res.duty - 0.5) > 0.08, `expected asymmetric duty, got ${res.duty}`);
-}
-
-// 7. Synthesis continuity, bounded amplitude, and exponential release tail
-{
-  const sampleRate = 48000;
-  const frameSamples = 960;
   const state = createSidSynthState();
-  const toneEv = makeEvents([4910, 1227, 1227, 1227, 1227, 1227, 1227, 1227], 1000, false);
-  const bufActive = new Float32Array(frameSamples);
-  synthesizeC64Frame(state, analyzeSpectrumFrame(toneEv, false), sampleRate, bufActive);
+  // Laser shot: rem=5, step=-9 (0xf7)
+  const laserRam = new Uint8Array([0, 0, 5, 0xbf, 0xf7, 0xfb, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), laserRam, state), ['laser']);
 
-  let peak = 0;
-  for (const s of bufActive) {
-    assert.ok(Number.isFinite(s));
-    peak = Math.max(peak, Math.abs(s));
-  }
-  assert.ok(peak > 0.02 && peak <= 0.95, `unexpected active peak ${peak}`);
+  // Holding same countdown does not retrigger mid-shot
+  const laserFrame2 = new Uint8Array([0, 0, 4, 0xb6, 0xf7, 0xfc, 1, 1]);
+  assert.deepEqual(detectC64Triggers(makeEvents(Array(15).fill(1367), 43000, false), laserFrame2, state), []);
 
-  // Silent frame immediately after should smoothly decay (release tail), not snap to zero at sample 0
-  const bufRelease = new Float32Array(frameSamples);
-  synthesizeC64Frame(state, analyzeSpectrumFrame(new Uint32Array(0), state.lastRawLevel), sampleRate, bufRelease);
-  const headRms = Math.sqrt(bufRelease.slice(0, 120).reduce((a, b) => a + b * b, 0) / 120);
-  const tailRms = Math.sqrt(bufRelease.slice(-120).reduce((a, b) => a + b * b, 0) / 120);
-  assert.ok(headRms > 0.005 && tailRms < headRms, `expected decaying release tail: head=${headRms}, tail=${tailRms}`);
+  // Platform drop: rem=2, step=+10 (0x0a)
+  const platRam = new Uint8Array([0, 0, 2, 0x82, 0x0a, 0x10, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), platRam, state), ['platform']);
 
-  // Legacy spectrum renderer sanity check
-  const bufSpec = new Float32Array(frameSamples);
-  renderSpectrumBeeperFrame(createSidSynthState(), toneEv, 0, sampleRate, bufSpec);
-  assert.ok(bufSpec.some(v => Math.abs(v) > 0.001));
+  // Big explosion: rem=63 (0x3f)
+  const expRam = new Uint8Array([0, 0, 0x3f, 0x00, 0x00, 0x1a, 1, 1]);
+  assert.deepEqual(detectC64Triggers(new Uint32Array(0), expRam, state), ['explosion_big']);
 }
 
-// 8. End-to-end integration against real Starquake WASM audioEvents
+// 3. Immediate 0xD7C0 bursts classify footsteps, pickups, and noisy hits
+{
+  const state = createSidSynthState();
+  const footstep = makeEvents([881, 1196, 1151, 1106], 34378, false);
+  assert.deepEqual(detectC64Triggers(footstep, new Uint8Array(8), state), ['footstep']);
+
+  const pickup = makeEvents([611, 566, 521, 476, 431, 386, 341, 296], 33000, false);
+  assert.deepEqual(detectC64Triggers(pickup, new Uint8Array(8), state), ['pickup']);
+
+  const hit = makeEvents([310, 1420, 240, 1890, 410, 1120, 290, 1640, 350, 980, 260, 1510, 390, 1200], 30000, false);
+  assert.deepEqual(detectC64Triggers(hit, new Uint8Array(8), state), ['explosion_small']);
+}
+
+// 4. End-to-end synthesis on live Starquake WASM frames
 {
   const wasmBytes = fs.readFileSync(path.join(root, 'public/z80-single.wasm'));
   const sna = fs.readFileSync(path.join(root, 'public/starquake.sna'));
@@ -135,26 +92,42 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
 
   const state = createSidSynthState();
   const sampleRate = 48000;
-  let activeFrames = 0;
+  let totalVoiceTriggers = 0;
   let maxPeak = 0;
-  for (let f = 1; f <= 60; f++) {
-    if (f === 40) e.emu_set_key_row(2, 0xff & ~1); // Press Up (Q)
-    if (f === 52) e.emu_set_key_row(2, 0xff);
+  let prevLastSample = 0;
+  let maxBoundaryJump = 0;
+
+  for (let f = 1; f <= 120; f++) {
+    if (f === 41) e.emu_set_key_row(7, 0xff & ~(1 << 2));
+    if (f === 65) { e.emu_set_key_row(7, 0xff); e.emu_set_key_row(2, 0xff & ~1); }
+    if (f === 90) { e.emu_set_key_row(2, 0xff); e.emu_set_key_row(1, 0xff & ~1); }
     e.emu_begin_frame();
     e.emu_tick_range(0, 512, 50, f, 2, 0, 15, 0, 31);
     const count = Math.min(4096, e.emu_audio_count());
     const events = count ? new Uint32Array(mem.buffer, e.emu_audio_ptr() >>> 0, count).slice() : new Uint32Array(0);
-    const analysis = analyzeSpectrumFrame(events, state.lastRawLevel);
-    if (analysis.kind !== 'silent') activeFrames++;
-    const out = new Float32Array(Math.round((sampleRate * analysis.totalCycles) / 3500000));
-    synthesizeC64Frame(state, analysis, sampleRate, out);
+    const ptr = e.emu_screen_ptr(e.emu_current_room()) >>> 0;
+    const sfxRam = new Uint8Array(mem.buffer, ptr + (0xa41b - 0x4000), 8).slice();
+
+    const out = new Float32Array(960);
+    const before = state.voices.length;
+    synthesizeC64Frame(state, events, sfxRam, sampleRate, out);
+    if (state.voices.length > before) totalVoiceTriggers++;
+
+    maxBoundaryJump = Math.max(maxBoundaryJump, Math.abs(out[0] - prevLastSample));
+    prevLastSample = out[out.length - 1];
     for (const s of out) {
       assert.ok(Number.isFinite(s));
       maxPeak = Math.max(maxPeak, Math.abs(s));
     }
   }
-  assert.ok(activeFrames >= 5, `expected active Starquake audio frames, got ${activeFrames}`);
-  assert.ok(maxPeak > 0.02 && maxPeak <= 0.95, `unexpected peak ${maxPeak}`);
+  assert.ok(totalVoiceTriggers >= 5, `expected multiple SID voice triggers, got ${totalVoiceTriggers}`);
+  assert.ok(maxPeak > 0.05 && maxPeak <= 0.95, `unexpected peak ${maxPeak}`);
+  assert.ok(maxBoundaryJump < 0.25, `unexpected boundary jump ${maxBoundaryJump}`);
+
+  // Legacy spectrum renderer sanity check
+  const bufSpec = new Float32Array(960);
+  renderSpectrumBeeperFrame(createSidSynthState(), makeEvents([1227, 1227, 1227, 1227]), 0, sampleRate, bufSpec);
+  assert.ok(bufSpec.some(v => Math.abs(v) > 0.001));
 }
 
 console.log('C64 SID audio analysis & synthesis tests passed.');
