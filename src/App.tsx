@@ -238,7 +238,7 @@ export default function App() {
   function startAudio() {
     const engine = getAudioEngine();
     engine.setStyle(audioStyleRef.current);
-    engine.start();
+    void engine.start();
     if (gameOverRef.current) engine.startHighscoreMusic();
   }
 
