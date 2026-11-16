@@ -3,34 +3,40 @@ export type AudioStyle = 'c64' | 'spectrum';
 export const SPECTRUM_CLOCK_HZ = 3_500_000;
 export const SPECTRUM_FRAME_CYCLES = 70_000;
 
-export type FrameKind = 'silent' | 'tone' | 'blip' | 'noise';
+export interface ToggleEvent {
+  cycle: number;
+  level: boolean;
+}
 
-export interface AnalyzedAudioFrame {
-  kind: FrameKind;
+export interface PreparedC64Frame {
+  toggles: ToggleEvent[];
   totalCycles: number;
+  startLevel: boolean;
   endLevel: boolean;
-  startFreq: number;
-  endFreq: number;
-  duty: number;
-  noiseMix: number;
+  activeStartCycle: number;
+  activeEndCycle: number;
+  medianHalfPeriod: number;
+  isNoise: boolean;
   noiseClockHz: number;
-  activeSpanRatio: number;
+  isShortBurst: boolean;
+  endsNearBoundary: boolean;
 }
 
 export interface SidSynthState {
-  phase1: number;
-  phase2: number;
-  phase3: number;
-  pwmPhase: number;
+  lastRawLevel: boolean;
+  prevEndedActive: boolean;
+  prevMedianHalfPeriod: number;
+  activeEnv: number;
+  releaseTauSec: number;
+  tailPhase: number;
+  tailFreq: number;
+  hpPrevIn: number;
+  hpOut: number;
+  triState: number;
   noisePhase: number;
   lfsr: number;
   noiseSample: number;
-  currentFreq: number;
-  envGain: number;
-  releaseTauSec: number;
-  transientEnv: number;
-  lastActiveKind: FrameKind;
-  lastRawLevel: boolean;
+  // Legacy Spectrum beeper filter state
   spectrumLowPass: number;
   spectrumPreviousInput: number;
   spectrumHighPass: number;
@@ -38,19 +44,19 @@ export interface SidSynthState {
 
 export function createSidSynthState(): SidSynthState {
   return {
-    phase1: 0,
-    phase2: 0,
-    phase3: 0,
-    pwmPhase: 0,
+    lastRawLevel: false,
+    prevEndedActive: false,
+    prevMedianHalfPeriod: 0,
+    activeEnv: 0,
+    releaseTauSec: 0.045,
+    tailPhase: 0,
+    tailFreq: 440,
+    hpPrevIn: 0,
+    hpOut: 0,
+    triState: 0,
     noisePhase: 0,
     lfsr: 0x7ffff8,
     noiseSample: 0,
-    currentFreq: 220,
-    envGain: 0,
-    releaseTauSec: 0.085,
-    transientEnv: 0,
-    lastActiveKind: 'silent',
-    lastRawLevel: false,
     spectrumLowPass: 0,
     spectrumPreviousInput: 0,
     spectrumHighPass: 0,
@@ -61,26 +67,18 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
-function clampFreq(freq: number): number {
-  return clamp(freq, 48, 4200);
-}
-
-function average(values: number[]): number {
-  if (!values.length) return 0;
-  let sum = 0;
-  for (let i = 0; i < values.length; i++) sum += values[i];
-  return sum / values.length;
-}
-
 /**
- * Classifies one 50 Hz frame of ZX Spectrum port 0xFE events into pitch, duty,
- * and noise parameters while stripping border-only writes and 50 Hz CPU-busy gaps.
+ * Extracts exact bit-4 toggles from one frame of port 0xFE writes, suppresses
+ * border-only writes, and bridges 50 Hz Z80 sprite-draw gaps inside continuous sounds.
  */
-export function analyzeSpectrumFrame(events: Uint32Array, initialLevel: boolean): AnalyzedAudioFrame {
-  let level = initialLevel;
+export function prepareC64FrameEvents(
+  events: Uint32Array,
+  state: Pick<SidSynthState, 'lastRawLevel' | 'prevEndedActive' | 'prevMedianHalfPeriod'>,
+): PreparedC64Frame {
+  let level = state.lastRawLevel;
   let cycleOffset = 0;
   let previousCycle = -1;
-  const toggleCycles: number[] = [];
+  const rawToggles: ToggleEvent[] = [];
 
   for (let i = 0; i < events.length; i++) {
     const raw = events[i];
@@ -92,195 +90,149 @@ export function analyzeSpectrumFrame(events: Uint32Array, initialLevel: boolean)
     previousCycle = cycle;
     const bit = (raw & 0x10) !== 0;
     if (bit !== level) {
-      toggleCycles.push(absCycle);
+      rawToggles.push({ cycle: absCycle, level: bit });
       level = bit;
     }
   }
 
   const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
 
-  if (toggleCycles.length < 2) {
+  // Ignore 0 or 1 toggle frames (border writes / static level)
+  if (rawToggles.length < 2) {
+    state.lastRawLevel = level;
+    state.prevEndedActive = false;
     return {
-      kind: 'silent',
+      toggles: [],
       totalCycles,
+      startLevel: level,
       endLevel: level,
-      startFreq: 0,
-      endFreq: 0,
-      duty: 0.5,
-      noiseMix: 0,
+      activeStartCycle: 0,
+      activeEndCycle: 0,
+      medianHalfPeriod: 0,
+      isNoise: false,
       noiseClockHz: 0,
-      activeSpanRatio: 0,
+      isShortBurst: false,
+      endsNearBoundary: false,
     };
   }
 
-  const rawIntervals: number[] = [];
-  for (let i = 1; i < toggleCycles.length; i++) {
-    rawIntervals.push(Math.max(1, toggleCycles[i] - toggleCycles[i - 1]));
-  }
-
-  // Single stray toggle spanning most of a frame is a border/init write, not audio.
-  if (rawIntervals.length === 1 && rawIntervals[0] > 18_000) {
+  // Single isolated toggle pair spanning >18,000 cycles is a border/init pulse, not audio
+  if (rawToggles.length === 2 && rawToggles[1].cycle - rawToggles[0].cycle > 18_000) {
+    state.lastRawLevel = level;
+    state.prevEndedActive = false;
     return {
-      kind: 'silent',
+      toggles: [],
       totalCycles,
+      startLevel: level,
       endLevel: level,
-      startFreq: 0,
-      endFreq: 0,
-      duty: 0.5,
-      noiseMix: 0,
+      activeStartCycle: 0,
+      activeEndCycle: 0,
+      medianHalfPeriod: 0,
+      isNoise: false,
       noiseClockHz: 0,
-      activeSpanRatio: 0,
+      isShortBurst: false,
+      endsNearBoundary: false,
     };
   }
 
-  // Starquake's 0xA5BE routine pauses during frame sprite logic (~4k-12k cycles) then
-  // emits steady pulses. Using the 40th percentile ignores those CPU-busy frame gaps.
-  const sorted = [...rawIntervals].sort((a, b) => a - b);
-  const coreMedian = sorted[Math.floor(sorted.length * 0.4)];
-  const gapThreshold = Math.max(coreMedian * 2.8, 320);
-
-  let activeIntervals = rawIntervals.filter(dt => dt <= gapThreshold && dt >= 24);
-  if (!activeIntervals.length) {
-    activeIntervals = rawIntervals.filter(dt => dt <= 20_000);
+  const activeInts: number[] = [];
+  for (let i = 1; i < rawToggles.length; i++) {
+    const dt = rawToggles[i].cycle - rawToggles[i - 1].cycle;
+    if (dt >= 40 && dt <= 8000) activeInts.push(dt);
   }
-  if (!activeIntervals.length) {
-    return {
-      kind: 'silent',
-      totalCycles,
-      endLevel: level,
-      startFreq: 0,
-      endFreq: 0,
-      duty: 0.5,
-      noiseMix: 0,
-      noiseClockHz: 0,
-      activeSpanRatio: 0,
-    };
-  }
+  const sorted = [...activeInts].sort((a, b) => a - b);
+  const medianHalfPeriod = sorted.length ? sorted[Math.floor(sorted.length * 0.5)] : 0;
 
-  const meanDt = average(activeIntervals);
-  let variance = 0;
-  for (let i = 0; i < activeIntervals.length; i++) {
-    const d = activeIntervals[i] - meanDt;
-    variance += d * d;
-  }
-  const stdDt = Math.sqrt(variance / activeIntervals.length);
-  const cv = meanDt > 0 ? stdDt / meanDt : 0;
-
-  let diffSum = 0;
-  let signChanges = 0;
-  let prevDiff = 0;
-  for (let i = 1; i < activeIntervals.length; i++) {
-    const diff = activeIntervals[i] - activeIntervals[i - 1];
-    diffSum += Math.abs(diff);
-    if (i > 1 && ((diff > 0 && prevDiff < 0) || (diff < 0 && prevDiff > 0))) {
-      signChanges++;
-    }
-    if (diff !== 0) prevDiff = diff;
-  }
-  const jitterCv = activeIntervals.length > 1 && meanDt > 0 ? (diffSum / (activeIntervals.length - 1)) / meanDt : 0;
-  const signChangeRatio = activeIntervals.length > 2 ? signChanges / (activeIntervals.length - 2) : 0;
-
-  let startFreq: number;
-  let endFreq: number;
-  if (activeIntervals.length >= 4) {
-    const headCount = Math.max(1, Math.floor(activeIntervals.length / 3));
-    const headMean = average(activeIntervals.slice(0, headCount));
-    const tailMean = average(activeIntervals.slice(-headCount));
-    startFreq = clampFreq(SPECTRUM_CLOCK_HZ / (2 * headMean));
-    endFreq = clampFreq(SPECTRUM_CLOCK_HZ / (2 * tailMean));
-  } else {
-    const freq = clampFreq(SPECTRUM_CLOCK_HZ / (2 * meanDt));
-    startFreq = freq;
-    endFreq = freq;
-  }
-
-  let duty = 0.5;
-  if (activeIntervals.length >= 4) {
-    let evenSum = 0;
-    let evenCount = 0;
-    let oddSum = 0;
-    let oddCount = 0;
-    for (let i = 0; i < activeIntervals.length; i++) {
-      if ((i & 1) === 0) {
-        evenSum += activeIntervals[i];
-        evenCount++;
-      } else {
-        oddSum += activeIntervals[i];
-        oddCount++;
+  let isNoise = false;
+  let noiseClockHz = 0;
+  if (activeInts.length >= 6 && medianHalfPeriod > 0) {
+    let sum = 0;
+    for (let i = 0; i < activeInts.length; i++) sum += activeInts[i];
+    const mean = sum / activeInts.length;
+    let variance = 0;
+    let signChanges = 0;
+    let prevDiff = 0;
+    for (let i = 0; i < activeInts.length; i++) {
+      const d = activeInts[i] - mean;
+      variance += d * d;
+      if (i > 0) {
+        const diff = activeInts[i] - activeInts[i - 1];
+        if (i > 1 && ((diff > 0 && prevDiff < 0) || (diff < 0 && prevDiff > 0))) signChanges++;
+        if (diff !== 0) prevDiff = diff;
       }
     }
-    const evenMean = evenSum / evenCount;
-    const oddMean = oddSum / oddCount;
-    const asym = Math.abs(evenMean - oddMean) / (evenMean + oddMean);
-    if (asym > 0.04) {
-      duty = clamp(evenMean / (evenMean + oddMean), 0.22, 0.78);
+    const cv = Math.sqrt(variance / activeInts.length) / mean;
+    const signRatio = activeInts.length > 2 ? signChanges / (activeInts.length - 2) : 0;
+    if (cv >= 0.28 && signRatio >= 0.35) {
+      isNoise = true;
+      noiseClockHz = clamp(SPECTRUM_CLOCK_HZ / Math.max(180, mean * 1.4), 450, 7500);
     }
   }
 
-  const activeSpan = toggleCycles[toggleCycles.length - 1] - toggleCycles[0];
-  const activeSpanRatio = clamp(activeSpan / totalCycles, 0.2, 1.0);
+  let toggles = rawToggles;
+  let startLevel = state.lastRawLevel;
+  const endsNearBoundary =
+    rawToggles.length >= 4 &&
+    rawToggles[rawToggles.length - 1].cycle >= totalCycles - 8000;
+  const startsAfterCpuGap =
+    rawToggles.length >= 4 &&
+    rawToggles[0].cycle >= 10_000 &&
+    medianHalfPeriod > 0;
 
-  const sweepRatio = Math.max(startFreq, endFreq) / Math.max(1, Math.min(startFreq, endFreq));
-  const isBlip = toggleCycles.length <= 7 && activeSpan < 14_000 && cv < 0.25 && sweepRatio < 1.25;
-  const isNoise =
-    !isBlip &&
-    ((cv >= 0.25 && jitterCv >= 0.20 && signChangeRatio >= 0.32) ||
-      (cv >= 0.55 && activeIntervals.length >= 8));
-
-  if (isBlip) {
-    return {
-      kind: 'blip',
-      totalCycles,
-      endLevel: level,
-      startFreq,
-      endFreq,
-      duty,
-      noiseMix: 0.14,
-      noiseClockHz: clamp(startFreq * 2.2, 600, 5200),
-      activeSpanRatio,
-    };
+  // Bridge the ~10ms Z80 sprite-draw pause during continuous multi-frame sounds
+  // so 50 Hz Spectrum chop becomes a smooth, continuous C64 SID sweep.
+  if (
+    state.prevEndedActive &&
+    startsAfterCpuGap &&
+    state.prevMedianHalfPeriod > 0
+  ) {
+    const ratio =
+      Math.max(state.prevMedianHalfPeriod, medianHalfPeriod) /
+      Math.min(state.prevMedianHalfPeriod, medianHalfPeriod);
+    if (ratio <= 1.55) {
+      const synthetic: ToggleEvent[] = [];
+      let c = rawToggles[0].cycle;
+      let lv = rawToggles[0].level;
+      const stepStart = state.prevMedianHalfPeriod;
+      const stepEnd = medianHalfPeriod;
+      while (c > stepEnd * 0.25) {
+        const frac = c / rawToggles[0].cycle;
+        const dt = Math.max(40, stepStart + (stepEnd - stepStart) * frac);
+        c -= dt;
+        if (c >= 0) {
+          lv = !lv;
+          synthetic.push({ cycle: c, level: lv });
+        }
+      }
+      synthetic.reverse();
+      if (synthetic.length > 0) {
+        startLevel = !synthetic[0].level;
+        toggles = [...synthetic, ...rawToggles];
+      }
+    }
   }
 
-  if (isNoise) {
-    const noiseMix = clamp((cv - 0.16) * 1.35, 0.45, 0.90);
-    const noiseClockHz = clamp(SPECTRUM_CLOCK_HZ / Math.max(160, meanDt * 1.35), 420, 8600);
-    return {
-      kind: 'noise',
-      totalCycles,
-      endLevel: level,
-      startFreq,
-      endFreq,
-      duty,
-      noiseMix,
-      noiseClockHz,
-      activeSpanRatio,
-    };
-  }
+  const activeStartCycle = toggles[0].cycle;
+  const activeEndCycle = toggles[toggles.length - 1].cycle;
+  const isShortBurst = rawToggles.length <= 12 && (activeEndCycle - activeStartCycle) < 14_000;
+
+  state.lastRawLevel = level;
+  state.prevEndedActive = endsNearBoundary && medianHalfPeriod > 0;
+  state.prevMedianHalfPeriod = medianHalfPeriod;
 
   return {
-    kind: 'tone',
+    toggles,
     totalCycles,
+    startLevel,
     endLevel: level,
-    startFreq,
-    endFreq,
-    duty,
-    noiseMix: 0,
-    noiseClockHz: 0,
-    activeSpanRatio,
+    activeStartCycle,
+    activeEndCycle,
+    medianHalfPeriod,
+    isNoise,
+    noiseClockHz,
+    isShortBurst,
+    endsNearBoundary,
   };
-}
-
-function polyBlep(phase: number, dt: number): number {
-  if (dt <= 0) return 0;
-  if (phase < dt) {
-    const t = phase / dt;
-    return t + t - t * t - 1;
-  }
-  if (phase > 1 - dt) {
-    const t = (phase - 1) / dt;
-    return t * t + t + t + 1;
-  }
-  return 0;
 }
 
 function stepSidLfsr(state: SidSynthState): number {
@@ -288,126 +240,111 @@ function stepSidLfsr(state: SidSynthState): number {
   const bit17 = (state.lfsr >>> 17) & 1;
   state.lfsr = ((state.lfsr << 1) | (bit22 ^ bit17)) & 0x7fffff;
   if (state.lfsr === 0) state.lfsr = 0x7ffff8;
-  // Convert top 8 SID noise bits to signed [-1, 1]
-  const byte = ((state.lfsr >>> 15) & 0xff);
-  return (byte / 127.5) - 1;
+  return (((state.lfsr >>> 15) & 0xff) / 127.5) - 1;
 }
 
 /**
- * Renders one frame of C64 SID-inspired audio into `out` from an analyzed frame.
- * Maintains phase, PWM LFO, 23-bit LFSR noise, and ADSR release across frames.
+ * Renders one frame of cycle-accurate C64 6581 SID-shaped audio into `out`.
+ * Preserves exact timing and rhythm while eliminating 50 Hz gaps and harsh 1-bit buzz.
  */
 export function synthesizeC64Frame(
   state: SidSynthState,
-  analysis: AnalyzedAudioFrame,
+  frame: PreparedC64Frame,
   sampleRate: number,
   out: Float32Array,
 ): void {
-  const count = out.length;
-  const dtSec = 1 / sampleRate;
-  const isActive = analysis.kind !== 'silent';
+  const sampleCount = out.length;
+  const hasAudio = frame.toggles.length > 0;
 
-  if (!isActive && state.envGain <= 0.0004 && state.transientEnv <= 0.0004) {
+  if (!hasAudio && state.activeEnv <= 0.0004 && Math.abs(state.triState) <= 0.0004 && Math.abs(state.hpOut) <= 0.0004) {
     out.fill(0);
-    state.envGain = 0;
-    state.transientEnv = 0;
-    state.lastRawLevel = analysis.endLevel;
+    state.activeEnv = 0;
+    state.triState = 0;
+    state.hpOut = 0;
     return;
   }
 
-  const attackCoef = 1 - Math.exp(-dtSec / 0.003);
-  if (isActive) {
-    state.releaseTauSec = analysis.kind === 'blip' ? 0.036 : analysis.kind === 'noise' ? 0.11 : 0.088;
-    if (state.lastActiveKind === 'silent' || analysis.kind === 'blip') {
-      state.transientEnv = analysis.kind === 'blip' ? 0.55 : 0.35;
-      if (state.lastActiveKind === 'silent') {
-        state.currentFreq = analysis.startFreq;
-      }
+  const dtSec = 1 / sampleRate;
+  const sampleCycles = frame.totalCycles / sampleCount;
+  const attackCoef = 1 - Math.exp(-dtSec / 0.0015);
+  if (hasAudio) {
+    state.releaseTauSec = frame.isShortBurst ? 0.016 : 0.048;
+    if (frame.medianHalfPeriod > 0) {
+      state.tailFreq = clamp(SPECTRUM_CLOCK_HZ / (2 * frame.medianHalfPeriod), 55, 2200);
     }
   }
   const releaseCoef = Math.exp(-dtSec / state.releaseTauSec);
-  const transientDecay = Math.exp(-dtSec / 0.012);
-  const portamentoCoef = 1 - Math.exp(-dtSec / 0.006);
-  const pwmInc = 1.85 / sampleRate;
+  const hpCoef = Math.exp((-2 * Math.PI * 34) / sampleRate);
+  const triDecay = Math.exp((-2 * Math.PI * 520) / sampleRate);
 
-  const targetGain =
-    analysis.kind === 'silent' ? 0 :
-    analysis.kind === 'blip' ? 0.72 :
-    analysis.kind === 'noise' ? 0.88 :
-    0.84;
+  const gateEndCycle = hasAudio
+    ? (frame.endsNearBoundary ? frame.totalCycles : frame.activeEndCycle + Math.min(2500, Math.max(400, frame.medianHalfPeriod * 1.5)))
+    : -1;
 
-  const activeEndSample = analysis.kind === 'blip'
-    ? Math.max(1, Math.round(count * Math.min(0.65, analysis.activeSpanRatio)))
-    : count;
+  let level = frame.startLevel;
+  let toggleIdx = 0;
+  const toggles = frame.toggles;
+  let nextCycle = toggles.length ? toggles[0].cycle : Infinity;
 
-  const noiseRate = analysis.kind === 'noise'
-    ? analysis.noiseClockHz
-    : analysis.kind === 'blip'
-      ? analysis.noiseClockHz
-      : 2800;
+  for (let sample = 0; sample < sampleCount; sample++) {
+    const sampleStart = sample * sampleCycles;
+    const sampleEnd = (sample + 1) * sampleCycles;
+    const sampleMid = (sampleStart + sampleEnd) * 0.5;
 
-  for (let i = 0; i < count; i++) {
-    const t = count > 1 ? i / (count - 1) : 0;
-    const frameActive = isActive && i < activeEndSample;
+    while (toggleIdx < toggles.length && nextCycle <= sampleStart) {
+      level = toggles[toggleIdx].level;
+      toggleIdx++;
+      nextCycle = toggleIdx < toggles.length ? toggles[toggleIdx].cycle : Infinity;
+    }
 
-    if (frameActive) {
-      const targetFreq = analysis.startFreq + (analysis.endFreq - analysis.startFreq) * t;
-      state.currentFreq += portamentoCoef * (targetFreq - state.currentFreq);
-      state.envGain += attackCoef * (targetGain - state.envGain);
+    let cursor = sampleStart;
+    let area = 0;
+    while (toggleIdx < toggles.length && nextCycle < sampleEnd) {
+      area += (nextCycle - cursor) * (level ? 1 : -1);
+      cursor = nextCycle;
+      level = toggles[toggleIdx].level;
+      toggleIdx++;
+      nextCycle = toggleIdx < toggles.length ? toggles[toggleIdx].cycle : Infinity;
+    }
+    area += (sampleEnd - cursor) * (level ? 1 : -1);
+
+    const isGateOpen = hasAudio && sampleMid >= frame.activeStartCycle && sampleMid <= gateEndCycle;
+    if (isGateOpen) {
+      state.activeEnv += attackCoef * (1 - state.activeEnv);
     } else {
-      state.envGain *= releaseCoef;
+      state.activeEnv *= releaseCoef;
     }
 
-    state.transientEnv *= transientDecay;
+    let rawSq = area / sampleCycles;
 
-    const freq = clampFreq(state.currentFreq);
-    const dt1 = freq / sampleRate;
-    const dt2 = (freq * 0.5) / sampleRate;
-    const dt3 = (freq * 1.004) / sampleRate;
-
-    state.phase1 = (state.phase1 + dt1) % 1;
-    state.phase2 = (state.phase2 + dt2) % 1;
-    state.phase3 = (state.phase3 + dt3) % 1;
-    state.pwmPhase = (state.pwmPhase + pwmInc) % 1;
-
-    // Slow PWM sweep inspired by Starquake.sid (+3/-3 pw per frame), blended with frame duty
-    const lfoPw = 0.5 + 0.23 * Math.sin(2 * Math.PI * state.pwmPhase);
-    const pw = clamp(0.65 * lfoPw + 0.35 * analysis.duty, 0.18, 0.82);
-
-    // Voice 1: PolyBLEP PWM Pulse
-    let pulse1 = state.phase1 < pw ? 1 : -1;
-    pulse1 -= polyBlep(state.phase1, dt1);
-    pulse1 += polyBlep((state.phase1 - pw + 1) % 1, dt1);
-
-    // Voice 2: Sub-octave Triangle + slightly detuned Chorus Pulse
-    const triSub = 1 - 4 * Math.abs(state.phase2 - 0.5);
-    const pw3 = clamp(1 - pw, 0.18, 0.82);
-    let pulse3 = state.phase3 < pw3 ? 1 : -1;
-    pulse3 -= polyBlep(state.phase3, dt3);
-    pulse3 += polyBlep((state.phase3 - pw3 + 1) % 1, dt3);
-
-    const toneSignal =
-      analysis.kind === 'blip'
-        ? 0.58 * triSub + 0.42 * pulse1
-        : 0.56 * pulse1 + 0.28 * triSub + 0.18 * pulse3;
-
-    // Voice 3: 23-bit SID LFSR Noise
-    state.noisePhase += noiseRate / sampleRate;
-    while (state.noisePhase >= 1) {
-      state.noisePhase -= 1;
-      state.noiseSample = stepSidLfsr(state);
+    // During release tail after toggles stop, smoothly ring out with soft decaying pulse/triangle
+    if (!isGateOpen && state.activeEnv > 0.001) {
+      state.tailPhase = (state.tailPhase + state.tailFreq / sampleRate) % 1;
+      const tailWave = state.tailPhase < 0.42 ? 1 : -1;
+      rawSq = rawSq * 0.15 + tailWave * 0.85;
     }
 
-    const noiseWeight = analysis.kind === 'noise'
-      ? analysis.noiseMix
-      : clamp(state.transientEnv * 0.45, 0, 0.4);
-    const mixed = toneSignal * (1 - noiseWeight * 0.65) + state.noiseSample * noiseWeight;
+    // DC-blocking high-pass
+    state.hpOut = rawSq - state.hpPrevIn + hpCoef * state.hpOut;
+    state.hpPrevIn = rawSq;
 
-    out[i] = clamp(mixed * state.envGain * 0.22, -0.95, 0.95);
+    // Warm 6581 pulse + integrated triangle blend with subtle even-harmonic asymmetry
+    state.triState = state.triState * triDecay + state.hpOut * (1 - triDecay);
+    const sidWave = 0.50 * state.hpOut + 0.50 * state.triState + 0.07 * state.hpOut * Math.abs(state.triState);
+
+    let signal = sidWave;
+    if (frame.isNoise && isGateOpen) {
+      state.noisePhase += frame.noiseClockHz / sampleRate;
+      while (state.noisePhase >= 1) {
+        state.noisePhase -= 1;
+        state.noiseSample = stepSidLfsr(state);
+      }
+      signal = sidWave * 0.78 + state.noiseSample * 0.22;
+    }
+
+    const soft = Math.tanh(signal * 1.15);
+    out[sample] = clamp(soft * state.activeEnv * 0.22, -0.95, 0.95);
   }
-
-  state.lastActiveKind = analysis.kind;
-  state.lastRawLevel = analysis.endLevel;
 }
 
 /**
@@ -482,58 +419,33 @@ const HIGHSCORE_V1 = [
   188.8, 188.8, 188.8, 0, 188.8, 188.8, 282.9, 282.9, 188.8, 188.8, 252.0, 252.0, 188.8, 188.8, 238.0, 238.0,
   188.8, 188.8, 188.8, 0, 188.8, 188.8, 282.9, 282.9, 188.8, 188.8, 252.0, 252.0, 188.8, 188.8, 238.0, 238.0,
 ];
-const HIGHSCORE_V2 = [105.9, 105.9, 94.4, 94.4]; // 16 steps per phrase
-const HIGHSCORE_V3 = [635.1, 423.8, 565.8, 377.6]; // 16 steps per phrase
+const HIGHSCORE_V2 = [105.9, 105.9, 94.4, 94.4];
+const HIGHSCORE_V3 = [635.1, 423.8, 565.8, 377.6];
 
-function createSidSaturationCurve(): Float32Array<ArrayBuffer> {
-  const samples = 512;
-  const curve = new Float32Array(new ArrayBuffer(samples * 4));
-  for (let i = 0; i < samples; i++) {
-    const x = (i * 2) / (samples - 1) - 1;
-    // Mild asymmetric 6581 analog stage saturation
-    curve[i] = Math.tanh(x * 1.45 + 0.08 * x * x) / Math.tanh(1.53);
+function createSidPulseWave(context: AudioContext, duty = 0.36): PeriodicWave {
+  const harmonics = 24;
+  const real = new Float32Array(harmonics + 1);
+  const imag = new Float32Array(harmonics + 1);
+  for (let n = 1; n <= harmonics; n++) {
+    // Bandlimited pulse wave Fourier series with gentle 6581 high-harmonic roll-off
+    const rolloff = 1 / (1 + (n / 10) * (n / 10));
+    imag[n] = (2 / (n * Math.PI)) * Math.sin(n * Math.PI * duty) * rolloff;
   }
-  return curve;
-}
-
-function createCavernImpulse(context: AudioContext, durationSec = 0.72): AudioBuffer {
-  const length = Math.max(1, Math.floor(context.sampleRate * durationSec));
-  const buffer = context.createBuffer(2, length, context.sampleRate);
-  let seed = 0x51a4e2c1;
-  const nextRand = () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return (((t ^ (t >>> 14)) >>> 0) / 4294967296) * 2 - 1;
-  };
-
-  for (let ch = 0; ch < 2; ch++) {
-    const data = buffer.getChannelData(ch);
-    let lp = 0;
-    for (let i = 0; i < length; i++) {
-      const t = i / length;
-      const decay = Math.pow(1 - t, 2.4) * Math.exp(-t * 3.8);
-      lp = lp * 0.62 + nextRand() * 0.38;
-      data[i] = lp * decay;
-    }
-    // Early cavern reflections
-    for (const tapMs of ch === 0 ? [19, 41, 67] : [26, 49, 79]) {
-      const idx = Math.floor((tapMs / 1000) * context.sampleRate);
-      if (idx < length) data[idx] += 0.35;
-    }
-  }
-  return buffer;
+  return context.createPeriodicWave(real, imag, { disableNormalization: false });
 }
 
 /**
- * Web Audio C64 6581 SID-style synthesizer + cavern echo/reverb engine.
+ * Glitch-free AudioWorklet-backed C64 6581 SID audio engine with BufferSource fallback.
  */
 export class C64AudioEngine {
   private context: AudioContext | null = null;
+  private workletNode: AudioWorkletNode | null = null;
+  private startingPromise: Promise<void> | null = null;
   private nextTime = 0;
   private synthState: SidSynthState = createSidSynthState();
-  private sidBusInput: GainNode | null = null;
-  private masterGain: GainNode | null = null;
+  private c64BusInput: GainNode | null = null;
+  private spectrumBypassGain: GainNode | null = null;
+  private sidPulseWave: PeriodicWave | null = null;
   private musicTimer: ReturnType<typeof setInterval> | null = null;
   private musicNextStepTime = 0;
   private musicStep = 0;
@@ -542,85 +454,91 @@ export class C64AudioEngine {
 
   setStyle(style: AudioStyle) {
     this.style = style;
+    this.updateRoutingGains();
     if (style !== 'c64') {
       this.stopHighscoreMusic();
     }
   }
 
-  start() {
+  private updateRoutingGains() {
+    if (!this.context) return;
+    const now = this.context.currentTime;
+    if (this.c64BusInput) {
+      this.c64BusInput.gain.setValueAtTime(this.style === 'c64' ? 1 : 0, now);
+    }
+    if (this.spectrumBypassGain) {
+      this.spectrumBypassGain.gain.setValueAtTime(this.style === 'spectrum' ? 1 : 0, now);
+    }
+  }
+
+  async start(): Promise<void> {
     if (this.context) {
-      void this.context.resume();
+      await this.context.resume();
       return;
     }
+    if (this.startingPromise) {
+      await this.startingPromise;
+      return;
+    }
+
     const context = new AudioContext();
     this.context = context;
-    this.nextTime = context.currentTime + 0.01;
+    this.nextTime = context.currentTime + 0.015;
     this.synthState = createSidSynthState();
+    this.sidPulseWave = createSidPulseWave(context, 0.36);
 
-    // Persistent 6581 SID filter + saturation + stereo cavern delay & reverb bus
-    const sidInput = context.createGain();
-    sidInput.gain.value = 1.0;
+    // Warm 6581 SID bus: low-mid body + smooth 1850 Hz 2-pole LPF + subtle stereo cavern echo
+    const c64BusInput = context.createGain();
+    c64BusInput.gain.value = this.style === 'c64' ? 1 : 0;
+
+    const bodyShelf = context.createBiquadFilter();
+    bodyShelf.type = 'lowshelf';
+    bodyShelf.frequency.value = 300;
+    bodyShelf.gain.value = 3.0;
 
     const sidLowpass = context.createBiquadFilter();
     sidLowpass.type = 'lowpass';
-    sidLowpass.frequency.value = 2550;
-    sidLowpass.Q.value = 2.2;
-
-    const sidShaper = context.createWaveShaper();
-    sidShaper.curve = createSidSaturationCurve();
-    sidShaper.oversample = '2x';
-
-    const sidHighpass = context.createBiquadFilter();
-    sidHighpass.type = 'highpass';
-    sidHighpass.frequency.value = 36;
+    sidLowpass.frequency.value = 1850;
+    sidLowpass.Q.value = 0.85;
 
     const dryGain = context.createGain();
-    dryGain.gain.value = 0.78;
+    dryGain.gain.value = 0.86;
 
-    // Stereo ping-pong cavern echo
     const delayL = context.createDelay(0.5);
-    delayL.delayTime.value = 0.078;
+    delayL.delayTime.value = 0.088;
     const delayR = context.createDelay(0.5);
-    delayR.delayTime.value = 0.122;
+    delayR.delayTime.value = 0.142;
     const echoLpL = context.createBiquadFilter();
     echoLpL.type = 'lowpass';
-    echoLpL.frequency.value = 1950;
+    echoLpL.frequency.value = 1450;
     const echoLpR = context.createBiquadFilter();
     echoLpR.type = 'lowpass';
-    echoLpR.frequency.value = 1800;
+    echoLpR.frequency.value = 1350;
     const echoFbL = context.createGain();
-    echoFbL.gain.value = 0.24;
+    echoFbL.gain.value = 0.14;
     const echoFbR = context.createGain();
-    echoFbR.gain.value = 0.24;
-    const echoWet = context.createGain();
-    echoWet.gain.value = 0.26;
+    echoFbR.gain.value = 0.14;
     const echoMerger = context.createChannelMerger(2);
-
-    // Damped cavern reverb
-    const convolver = context.createConvolver();
-    convolver.buffer = createCavernImpulse(context, 0.72);
-    const reverbWet = context.createGain();
-    reverbWet.gain.value = 0.24;
+    const echoWet = context.createGain();
+    echoWet.gain.value = 0.17;
 
     const compressor = context.createDynamicsCompressor();
-    compressor.threshold.value = -14;
-    compressor.knee.value = 12;
-    compressor.ratio.value = 4;
+    compressor.threshold.value = -12;
+    compressor.knee.value = 10;
+    compressor.ratio.value = 3.5;
     compressor.attack.value = 0.004;
-    compressor.release.value = 0.12;
+    compressor.release.value = 0.10;
 
     const masterGain = context.createGain();
-    masterGain.gain.value = 0.85;
+    masterGain.gain.value = 0.90;
 
-    sidInput.connect(sidLowpass);
-    sidLowpass.connect(sidShaper);
-    sidShaper.connect(sidHighpass);
-
-    sidHighpass.connect(dryGain);
+    c64BusInput.connect(bodyShelf);
+    bodyShelf.connect(sidLowpass);
+    sidLowpass.connect(dryGain);
     dryGain.connect(compressor);
 
-    sidHighpass.connect(delayL);
-    sidHighpass.connect(delayR);
+    sidLowpass.connect(delayL);
+    sidLowpass.connect(delayR);
     delayL.connect(echoLpL);
     delayR.connect(echoLpR);
     echoLpL.connect(echoFbL);
@@ -632,38 +550,73 @@ export class C64AudioEngine {
     echoMerger.connect(echoWet);
     echoWet.connect(compressor);
 
-    sidHighpass.connect(convolver);
-    convolver.connect(reverbWet);
-    reverbWet.connect(compressor);
-
     compressor.connect(masterGain);
     masterGain.connect(context.destination);
 
-    this.sidBusInput = sidInput;
-    this.masterGain = masterGain;
-    void context.resume();
+    const spectrumBypass = context.createGain();
+    spectrumBypass.gain.value = this.style === 'spectrum' ? 1 : 0;
+    spectrumBypass.connect(context.destination);
+
+    this.c64BusInput = c64BusInput;
+    this.spectrumBypassGain = spectrumBypass;
+
+    const initWorklet = async () => {
+      try {
+        if (!context.audioWorklet) return;
+        const base = typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL ? import.meta.env.BASE_URL : '/';
+        await context.audioWorklet.addModule(`${base}c64-audio-processor.js`);
+        if (this.context !== context) return;
+        const node = new AudioWorkletNode(context, 'c64-audio-processor', {
+          numberOfInputs: 0,
+          numberOfOutputs: 1,
+          outputChannelCount: [1],
+        });
+        node.connect(c64BusInput);
+        node.connect(spectrumBypass);
+        this.workletNode = node;
+      } catch {
+        // Fallback to AudioBufferSourceNode scheduling if AudioWorklet is unavailable
+      } finally {
+        if (this.context === context) {
+          await context.resume();
+        }
+        this.startingPromise = null;
+      }
+    };
+
+    this.startingPromise = initWorklet();
+    await this.startingPromise;
   }
 
   stop() {
     this.stopHighscoreMusic();
+    this.startingPromise = null;
+    if (this.workletNode) {
+      this.workletNode.port.postMessage('reset');
+      this.workletNode.disconnect();
+      this.workletNode = null;
+    }
     if (this.context) {
       void this.context.close();
     }
     this.context = null;
-    this.sidBusInput = null;
-    this.masterGain = null;
+    this.c64BusInput = null;
+    this.spectrumBypassGain = null;
+    this.sidPulseWave = null;
     this.nextTime = 0;
     this.synthState = createSidSynthState();
   }
 
   resetFrameQueue() {
     this.stopHighscoreMusic();
+    this.workletNode?.port.postMessage('reset');
     if (this.context) {
-      this.nextTime = this.context.currentTime + 0.01;
+      this.nextTime = this.context.currentTime + 0.015;
     }
-    this.synthState.envGain = 0;
-    this.synthState.transientEnv = 0;
-    this.synthState.lastActiveKind = 'silent';
+    this.synthState.activeEnv = 0;
+    this.synthState.prevEndedActive = false;
+    this.synthState.triState = 0;
+    this.synthState.hpOut = 0;
   }
 
   playFrame(events: Uint32Array, lastByte: number) {
@@ -671,42 +624,36 @@ export class C64AudioEngine {
     if (!context) return;
 
     const sampleRate = context.sampleRate;
-    const analysis = this.style === 'c64' ? analyzeSpectrumFrame(events, this.synthState.lastRawLevel) : null;
-    const totalCycles = analysis ? analysis.totalCycles : SPECTRUM_FRAME_CYCLES;
+    const prepared = this.style === 'c64' ? prepareC64FrameEvents(events, this.synthState) : null;
+    const totalCycles = prepared ? prepared.totalCycles : SPECTRUM_FRAME_CYCLES;
     const sampleCount = Math.max(1, Math.round((sampleRate * totalCycles) / SPECTRUM_CLOCK_HZ));
-    const frameDuration = sampleCount / sampleRate;
+    const samples = new Float32Array(sampleCount);
 
-    if (
-      this.style === 'c64' &&
-      analysis &&
-      analysis.kind === 'silent' &&
-      this.synthState.envGain <= 0.0004 &&
-      this.synthState.transientEnv <= 0.0004
-    ) {
-      this.synthState.lastRawLevel = analysis.endLevel;
-      this.synthState.lastActiveKind = 'silent';
-      this.nextTime = context.currentTime + 0.004;
-      return;
-    }
-
-    const buffer = context.createBuffer(1, sampleCount, sampleRate);
-    const samples = buffer.getChannelData(0);
-
-    if (this.style === 'c64' && analysis) {
-      synthesizeC64Frame(this.synthState, analysis, sampleRate, samples);
+    if (this.style === 'c64' && prepared) {
+      synthesizeC64Frame(this.synthState, prepared, sampleRate, samples);
     } else {
       renderSpectrumBeeperFrame(this.synthState, events, lastByte, sampleRate, samples);
     }
 
+    if (this.workletNode) {
+      this.workletNode.port.postMessage(samples, [samples.buffer]);
+      return;
+    }
+
+    // Fallback when AudioWorklet isn't available yet
+    const frameDuration = sampleCount / sampleRate;
+    const buffer = context.createBuffer(1, sampleCount, sampleRate);
+    buffer.copyToChannel(samples, 0);
     const source = context.createBufferSource();
     source.buffer = buffer;
-    if (this.style === 'c64' && this.sidBusInput) {
-      source.connect(this.sidBusInput);
+    if (this.style === 'c64' && this.c64BusInput) {
+      source.connect(this.c64BusInput);
+    } else if (this.spectrumBypassGain) {
+      source.connect(this.spectrumBypassGain);
     } else {
       source.connect(context.destination);
     }
-
-    const startAt = Math.max(context.currentTime + 0.004, Math.min(this.nextTime, context.currentTime + 0.08));
+    const startAt = Math.max(context.currentTime + 0.004, this.nextTime);
     source.start(startAt);
     this.nextTime = startAt + frameDuration;
     source.onended = () => source.disconnect();
@@ -714,16 +661,19 @@ export class C64AudioEngine {
 
   startHighscoreMusic() {
     if (this.style !== 'c64') return;
-    if (!this.context) this.start();
+    if (!this.context) {
+      void this.start().then(() => this.startHighscoreMusic());
+      return;
+    }
     const context = this.context;
-    const destination = this.sidBusInput;
+    const destination = this.c64BusInput;
     if (!context || !destination || this.musicTimer !== null) return;
 
     this.musicStep = 0;
     this.musicNextStepTime = context.currentTime + 0.04;
 
     const scheduleStep = () => {
-      if (!this.context || !this.sidBusInput) return;
+      if (!this.context || !this.c64BusInput) return;
       const lookahead = this.context.currentTime + 0.25;
       while (this.musicNextStepTime < lookahead) {
         const step = this.musicStep % 64;
@@ -734,12 +684,12 @@ export class C64AudioEngine {
         if (leadFreq > 0 && (step === 0 || HIGHSCORE_V1[step - 1] !== leadFreq)) {
           let span = 1;
           while (step + span < 64 && HIGHSCORE_V1[step + span] === leadFreq) span++;
-          this.scheduleSidVoice(leadFreq, start, span * HIGHSCORE_STEP_SEC, 0.09, 'sawtooth', 0.012, 0.18);
+          this.scheduleSidVoice(leadFreq, start, span * HIGHSCORE_STEP_SEC, 0.095, true, 0.014, 0.18);
         }
 
         if (step % 16 === 0) {
-          this.scheduleSidVoice(HIGHSCORE_V2[phrase], start, 16 * HIGHSCORE_STEP_SEC, 0.075, 'triangle', 0.02, 0.25);
-          this.scheduleSidVoice(HIGHSCORE_V3[phrase], start, 16 * HIGHSCORE_STEP_SEC, 0.045, 'square', 0.03, 0.30);
+          this.scheduleSidVoice(HIGHSCORE_V2[phrase], start, 16 * HIGHSCORE_STEP_SEC, 0.08, false, 0.02, 0.24);
+          this.scheduleSidVoice(HIGHSCORE_V3[phrase], start, 16 * HIGHSCORE_STEP_SEC, 0.045, true, 0.03, 0.28);
         }
 
         this.musicStep = (this.musicStep + 1) % 64;
@@ -774,27 +724,32 @@ export class C64AudioEngine {
     startTime: number,
     durationSec: number,
     peakGain: number,
-    type: OscillatorType,
+    usePulse: boolean,
     attackSec: number,
     releaseSec: number,
   ) {
     const context = this.context;
-    const destination = this.sidBusInput;
+    const destination = this.c64BusInput;
     if (!context || !destination) return;
 
     const oscA = context.createOscillator();
     const oscB = context.createOscillator();
     const gain = context.createGain();
 
-    oscA.type = type;
+    if (usePulse && this.sidPulseWave) {
+      oscA.setPeriodicWave(this.sidPulseWave);
+      oscB.setPeriodicWave(this.sidPulseWave);
+    } else {
+      oscA.type = 'triangle';
+      oscB.type = 'triangle';
+    }
     oscA.frequency.setValueAtTime(freq, startTime);
-    oscB.type = 'square';
-    oscB.frequency.setValueAtTime(freq * 1.0035, startTime);
+    oscB.frequency.setValueAtTime(freq * 1.003, startTime);
 
     const mixA = context.createGain();
-    mixA.gain.value = 0.65;
+    mixA.gain.value = 0.62;
     const mixB = context.createGain();
-    mixB.gain.value = 0.35;
+    mixB.gain.value = 0.38;
 
     const sustainEnd = Math.max(startTime + attackSec + 0.01, startTime + durationSec - 0.02);
     const stopTime = sustainEnd + releaseSec;
