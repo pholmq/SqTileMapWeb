@@ -1,6 +1,7 @@
 import { PointerEvent, WheelEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Minus, Pause, Play, Plus, Scan, Volume2, VolumeX, Crosshair } from 'lucide-react';
 import { MAP_HEIGHT, MAP_WIDTH, paintSpectrumHud, paintSpectrumRoom, spectrumScreenHasFlash } from './spectrum';
+import { AudioStyle, C64AudioEngine } from './c64Audio';
 
 const SPECTRUM_KEY_POSITIONS: Record<string, { row: number; bit: number }> = {
   ShiftLeft: { row: 0, bit: 0 }, ShiftRight: { row: 0, bit: 0 },
@@ -44,8 +45,16 @@ const DEFAULT_CONTROLS: ControlBinding[] = [
 const ROOM_FOCUS_DURATION_MS = 1150;
 const DEFAULT_ZOOM_SCALE = 2.11;
 const BACKGROUND_DIVISOR = 2;
-const SPECTRUM_FRAME_CYCLES = 70000;
 const CONTROL_STORAGE_KEY = 'starquake-controls-v4';
+const AUDIO_STYLE_STORAGE_KEY = 'starquake-audio-style-v1';
+
+function readAudioStyle(): AudioStyle {
+  try {
+    const saved = localStorage.getItem(AUDIO_STYLE_STORAGE_KEY);
+    if (saved === 'c64' || saved === 'spectrum') return saved;
+  } catch { /* Use default when storage is unavailable. */ }
+  return 'c64';
+}
 
 function readControls(): ControlBinding[] {
   try {
@@ -86,7 +95,7 @@ export default function App() {
   const flashRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedRoomsRef = useRef<boolean[]>(Array(512).fill(false));
   const visitedAtRef = useRef<number[]>(Array(512).fill(0));
-  const audioRef = useRef<{ context: AudioContext | null; nextTime: number; lastLevel: boolean; lowPass: number; previousInput: number; highPass: number }>({ context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 });
+  const audioEngineRef = useRef<C64AudioEngine | null>(null);
   const frameStateRef = useRef<FrameState | null>(null);
   const frameIdRef = useRef(0);
   /* Room entered on the previous frame; its screen is always re-sent on the next frame. */
@@ -115,6 +124,9 @@ export default function App() {
   const [visitedVersion, setVisitedVersion] = useState(0);
   const [debugCapturePending, setDebugCapturePending] = useState(false);
   const [soundOn, setSoundOn] = useState(true);
+  const [audioStyle, setAudioStyle] = useState<AudioStyle>(readAudioStyle);
+  const audioStyleRef = useRef<AudioStyle>(audioStyle);
+  const gameOverRef = useRef(false);
   const [keyboardMode, setKeyboardMode] = useState<'mapped' | 'spectrum'>('mapped');
   const keyboardModeRef = useRef<'mapped' | 'spectrum'>('mapped');
   const [controls, setControls] = useState<ControlBinding[]>(readControls);
@@ -123,6 +135,8 @@ export default function App() {
   
   controlsRef.current = controls;
   soundOnRef.current = soundOn;
+  audioStyleRef.current = audioStyle;
+  gameOverRef.current = gameOver;
 
   const applyCamera = useCallback((next: Camera) => {
     if (cameraAnimationRef.current !== null) {
@@ -192,10 +206,18 @@ export default function App() {
   }, [controls]);
 
   useEffect(() => {
+    try { localStorage.setItem(AUDIO_STYLE_STORAGE_KEY, audioStyle); } catch { /* Storage may be unavailable. */ }
+    audioEngineRef.current?.setStyle(audioStyle);
+    if (audioStyle === 'c64' && gameOverRef.current && soundOnRef.current) {
+      audioEngineRef.current?.startHighscoreMusic();
+    }
+  }, [audioStyle]);
+
+  useEffect(() => {
     const unlock = () => {
       window.removeEventListener('pointerdown', unlock);
       window.removeEventListener('keydown', unlock);
-      if (playingRef.current && soundOnRef.current) startAudio();
+      if ((playingRef.current || gameOverRef.current) && soundOnRef.current) startAudio();
     };
     window.addEventListener('pointerdown', unlock);
     window.addEventListener('keydown', unlock);
@@ -205,85 +227,27 @@ export default function App() {
     };
   }, []);
 
+  function getAudioEngine() {
+    if (!audioEngineRef.current) {
+      audioEngineRef.current = new C64AudioEngine();
+      audioEngineRef.current.setStyle(audioStyleRef.current);
+    }
+    return audioEngineRef.current;
+  }
+
   function startAudio() {
-    const existing = audioRef.current.context;
-    if (existing) { void existing.resume(); return; }
-    const context = new AudioContext();
-    audioRef.current = { context, nextTime: context.currentTime + 0.01, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
-    void context.resume();
+    const engine = getAudioEngine();
+    engine.setStyle(audioStyleRef.current);
+    engine.start();
+    if (gameOverRef.current) engine.startHighscoreMusic();
   }
 
   function stopAudio() {
-    const context = audioRef.current.context;
-    if (context) void context.close();
-    audioRef.current = { context: null, nextTime: 0, lastLevel: false, lowPass: 0, previousInput: 0, highPass: 0 };
+    audioEngineRef.current?.stop();
   }
 
   function playBeeper(events: Uint32Array, last: number) {
-    const audio = audioRef.current;
-    const context = audio.context;
-    if (!context) return;
-    const eventCycles = new Float64Array(events.length);
-    let cycleOffset = 0;
-    let previousCycle = -1;
-    for (let i = 0; i < events.length; i++) {
-      const cycle = events[i] >>> 8;
-      if (previousCycle >= 0 && cycle + SPECTRUM_FRAME_CYCLES / 2 < previousCycle) {
-        cycleOffset += SPECTRUM_FRAME_CYCLES;
-      }
-      eventCycles[i] = cycle + cycleOffset;
-      previousCycle = cycle;
-    }
-    const totalCycles = Math.max(SPECTRUM_FRAME_CYCLES, cycleOffset + SPECTRUM_FRAME_CYCLES);
-    const sampleRate = context.sampleRate;
-    const sampleCount = Math.max(1, Math.round(sampleRate * totalCycles / 3500000));
-    const frameDuration = sampleCount / sampleRate;
-    const buffer = context.createBuffer(1, sampleCount, sampleRate);
-    const samples = buffer.getChannelData(0);
-    let level = audio.lastLevel;
-    let eventIndex = 0;
-    let nextCycle = eventCycles.length ? eventCycles[0] : Infinity;
-    const sampleCycles = totalCycles / sampleCount;
-    const lowPassCoefficient = 1 - Math.exp(-2 * Math.PI * 4800 / sampleRate);
-    const highPassCoefficient = Math.exp(-2 * Math.PI * 35 / sampleRate);
-    let lowPass = audio.lowPass;
-    let previousInput = audio.previousInput;
-    let highPass = audio.highPass;
-    for (let sample = 0; sample < sampleCount; sample++) {
-      const sampleStart = sample * sampleCycles;
-      const sampleEnd = (sample + 1) * sampleCycles;
-      while (eventIndex < events.length && nextCycle <= sampleStart) {
-        level = (events[eventIndex] & 0x10) !== 0;
-        eventIndex++;
-        nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
-      }
-      let cursor = sampleStart;
-      let area = 0;
-      while (eventIndex < events.length && nextCycle < sampleEnd) {
-        area += (nextCycle - cursor) * (level ? 1 : -1);
-        cursor = nextCycle;
-        level = (events[eventIndex] & 0x10) !== 0;
-        eventIndex++;
-        nextCycle = eventIndex < events.length ? eventCycles[eventIndex] : Infinity;
-      }
-      area += (sampleEnd - cursor) * (level ? 1 : -1);
-      const input = (area / sampleCycles) * 0.14;
-      lowPass += lowPassCoefficient * (input - lowPass);
-      highPass = lowPass - previousInput + highPassCoefficient * highPass;
-      previousInput = lowPass;
-      samples[sample] = highPass;
-    }
-    audio.lastLevel = (last & 0x10) !== 0;
-    audio.lowPass = lowPass;
-    audio.previousInput = previousInput;
-    audio.highPass = highPass;
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    source.connect(context.destination);
-    const startAt = Math.max(context.currentTime + 0.004, audio.nextTime);
-    source.start(startAt);
-    audio.nextTime = startAt + frameDuration;
-    source.onended = () => source.disconnect();
+    getAudioEngine().playFrame(events, last);
   }
 
   const drawFrame = useCallback((message: Extract<WorkerMessage, { type: 'collected' }>) => {
@@ -359,6 +323,9 @@ export default function App() {
     }
 
     if (soundOnRef.current) playBeeper(message.audioEvents, message.audioLast);
+    if (message.gameOver && soundOnRef.current) {
+      getAudioEngine().startHighscoreMusic();
+    }
   }, [centerRoomKeepZoom]);
 
   useEffect(() => {
@@ -726,7 +693,7 @@ export default function App() {
     if (initialPreviewTimerRef.current) clearTimeout(initialPreviewTimerRef.current);
     initialPreviewTimerRef.current = null;
     if (playingRef.current) {
-      playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); setStatus('Paused');
+      playingRef.current = false; setPlaying(false); if (frameTimerRef.current) clearTimeout(frameTimerRef.current); audioEngineRef.current?.resetFrameQueue(); setStatus('Paused');
     } else {
       if (!hasStartedRef.current) {
         visitedRoomsRef.current.fill(false);
@@ -740,6 +707,7 @@ export default function App() {
   
   const restartGame = async () => {
     if (!ready || restarting) return;
+    audioEngineRef.current?.resetFrameQueue();
     playingRef.current = false;
     setPlaying(false);
     if (frameTimerRef.current) clearTimeout(frameTimerRef.current);
@@ -780,6 +748,15 @@ export default function App() {
             <button className="icon-button" title="Fit entire map (End)" onClick={fitMap}><Scan size={16} /></button>
           </div>
           <div className="zoom-controls"><button className="icon-button" title="Zoom out" onClick={() => zoomAtCentre(0.8)}><Minus size={16} /></button><span>{Math.round(camera.scale / DEFAULT_ZOOM_SCALE * 100)}%</span><button className="icon-button" title="Zoom in" onClick={() => zoomAtCentre(1.25)}><Plus size={16} /></button></div>
+          <button
+            className="keyboard-mode-button audio-style-button"
+            title={audioStyle === 'c64' ? 'Using C64 SID-style audio (click for original 48K beeper)' : 'Using 48K Spectrum beeper (click for C64 SID-style audio)'}
+            onClick={() => {
+              const next: AudioStyle = audioStyle === 'c64' ? 'spectrum' : 'c64';
+              audioStyleRef.current = next;
+              setAudioStyle(next);
+            }}
+          >{audioStyle === 'c64' ? 'AUDIO: C64 SID' : 'AUDIO: 48K'}</button>
           <button className="icon-button sound-button" title={soundOn ? 'Mute' : 'Enable sound'} onClick={() => { const next = !soundOn; soundOnRef.current = next; setSoundOn(next); if (next) startAudio(); else stopAudio(); }}>{soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}</button>
         </div>
       </header>
