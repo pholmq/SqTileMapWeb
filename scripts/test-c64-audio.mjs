@@ -130,4 +130,41 @@ function makeEvents(intervals, startCycle = 1000, startBit = true) {
   assert.ok(bufSpec.some(v => Math.abs(v) > 0.001));
 }
 
+// 5. C64 graphics lookup preserves crisp 1x1 pixels (no 2x1 multicolor smearing)
+{
+  const specTs = fs.readFileSync(path.join(root, 'src/spectrum.ts'), 'utf8');
+  const { code: specCode } = transformSync(specTs, { loader: 'ts', format: 'esm', target: 'es2022' });
+  const specMod = await import(`data:text/javascript;base64,${Buffer.from(specCode).toString('base64')}`);
+
+  const screen = new Uint8Array(6912);
+  // Alternating 1-pixel pattern (0xAA = 10101010) at HUD row 16 col 2 and playfield row 48 col 0
+  screen[((16 & 0xc0) << 5) | ((16 & 0x38) << 2) | ((16 & 7) << 8) | 2] = 0xaa;
+  screen[0x1800 + (2 << 5) + 2] = 0x07; // white on black
+  screen[((48 & 0xc0) << 5) | ((48 & 0x38) << 2) | ((48 & 7) << 8) | 0] = 0xaa;
+  screen[0x1800 + (6 << 5) + 0] = 0x43; // bright magenta/lavender on black
+
+  const makeMockCtx = () => {
+    let lastImage = null;
+    return {
+      createImageData: (w, h) => ({ width: w, height: h, data: new Uint8ClampedArray(w * h * 4) }),
+      putImageData: (img) => { lastImage = img; },
+      getLastImage: () => lastImage,
+    };
+  };
+
+  const roomCtx = makeMockCtx();
+  specMod.paintSpectrumRoom(roomCtx, 0, screen, false, 'c64');
+  const roomPx = new Uint32Array(roomCtx.getLastImage().data.buffer);
+  // Top row (y=48) first byte must alternate ink/paper on every single 1px column
+  assert.notEqual(roomPx[0], roomPx[1], 'playfield x=0 and x=1 must remain distinct (1x1 crisp)');
+  assert.equal(roomPx[0], roomPx[2], 'playfield x=0 and x=2 must match for 0xAA');
+
+  const hudCtx = makeMockCtx();
+  specMod.paintSpectrumHud(hudCtx, screen, 'c64');
+  const hudPx = new Uint32Array(hudCtx.getLastImage().data.buffer);
+  const offset = 16 * 256 + 2 * 8;
+  assert.notEqual(hudPx[offset], hudPx[offset + 1], 'HUD text x=0 and x=1 must remain distinct (1x1 crisp)');
+  assert.equal(hudPx[offset], hudPx[offset + 2], 'HUD text x=0 and x=2 must match for 0xAA');
+}
+
 console.log('C64 SID audio analysis & synthesis tests passed.');

@@ -137,177 +137,14 @@ export function triggerC64Preset(state: SidSynthState, preset: C64SfxPreset) {
 
   switch (preset) {
     case 'laser':
-      // Measured from C64 Starquake longplay: crisp 6581 Sawtooth 880 -> 430 Hz (50 Hz stepped) + initial noise/sub punch
+      // Punchy 135 ms C64 Starquake laser zap: crisp LFSR noise snap + fast 1040 -> 420 Hz Sawtooth sweep
       state.cooldownUntil.laser = now + 0.095;
       spawnVoice(state, {
-        durationSec: 0.28,
-        attackSec: 0.002,
-        decaySec: 0.24,
-        startFreq: 880,
-        endFreq: 425,
-        step2AtSec: 0,
-        step2Freq: 0,
-        vibratoHz: 0,
-        vibratoDepthHz: 0,
-        pulseMix: 0.20,
-        sawMix: 0.80,
-        triMix: 0,
-        noiseMix: 0,
-        duty: 0.5,
-        quantize50Hz: true,
-        noiseStartHz: 0,
-        noiseEndHz: 0,
-        filterStartHz: 5600,
-        filterEndHz: 2600,
-        filterQ: 0.8,
-        gain: 0.25,
-      });
-      spawnVoice(state, {
-        durationSec: 0.032,
-        attackSec: 0.001,
-        decaySec: 0.025,
-        startFreq: 160,
-        endFreq: 75,
-        step2AtSec: 0,
-        step2Freq: 0,
-        vibratoHz: 0,
-        vibratoDepthHz: 0,
-        pulseMix: 0,
-        sawMix: 0,
-        triMix: 0.35,
-        noiseMix: 0.65,
-        duty: 0.5,
-        quantize50Hz: false,
-        noiseStartHz: 4200,
-        noiseEndHz: 1400,
-        filterStartHz: 4200,
-        filterEndHz: 1500,
-        filterQ: 1.4,
-        gain: 0.19,
-      });
-      break;
-
-    case 'platform':
-      // Measured from C64 Starquake: clean 445 -> 882 Hz 50% square octave pop
-      state.cooldownUntil.platform = now + 0.10;
-      spawnVoice(state, {
         durationSec: 0.14,
         attackSec: 0.001,
         decaySec: 0.11,
-        startFreq: 445,
-        endFreq: 445,
-        step2AtSec: 0.045,
-        step2Freq: 882,
-        vibratoHz: 0,
-        vibratoDepthHz: 0,
-        pulseMix: 0.85,
-        sawMix: 0.15,
-        triMix: 0,
-        noiseMix: 0,
-        duty: 0.50,
-        quantize50Hz: true,
-        noiseStartHz: 0,
-        noiseEndHz: 0,
-        filterStartHz: 5200,
-        filterEndHz: 3600,
-        filterQ: 0.8,
-        gain: 0.24,
-      });
-      break;
-
-    case 'footstep':
-      // Measured from C64 Starquake (t=979.58s): bassy 120 -> 70 Hz SID thump/blup
-      state.cooldownUntil.footstep = now + 0.105;
-      spawnVoice(state, {
-        durationSec: 0.068,
-        attackSec: 0.001,
-        decaySec: 0.052,
-        startFreq: 155,
-        endFreq: 68,
-        step2AtSec: 0,
-        step2Freq: 0,
-        vibratoHz: 0,
-        vibratoDepthHz: 0,
-        pulseMix: 0.25,
-        sawMix: 0.15,
-        triMix: 0.60,
-        noiseMix: 0,
-        duty: 0.45,
-        quantize50Hz: false,
-        noiseStartHz: 0,
-        noiseEndHz: 0,
-        filterStartHz: 750,
-        filterEndHz: 260,
-        filterQ: 1.0,
-        gain: 0.29,
-      });
-      break;
-
-    case 'pickup':
-      // Crisp 880 Hz -> 1180 Hz bright SID square chime
-      state.cooldownUntil.pickup = now + 0.085;
-      spawnVoice(state, {
-        durationSec: 0.14,
-        attackSec: 0.001,
-        decaySec: 0.11,
-        startFreq: 660,
-        endFreq: 660,
-        step2AtSec: 0.04,
-        step2Freq: 990,
-        vibratoHz: 0,
-        vibratoDepthHz: 0,
-        pulseMix: 0.85,
-        sawMix: 0.15,
-        triMix: 0,
-        noiseMix: 0,
-        duty: 0.50,
-        quantize50Hz: true,
-        noiseStartHz: 0,
-        noiseEndHz: 0,
-        filterStartHz: 5600,
-        filterEndHz: 3800,
-        filterQ: 0.8,
-        gain: 0.23,
-      });
-      break;
-
-    case 'hover_up':
-      // Bubbly 50 Hz-stepped C64 SID arpeggio/pulse chirp (440 -> 880 Hz)
-      state.cooldownUntil.hover_up = now + 0.34;
-      spawnVoice(state, {
-        durationSec: 0.18,
-        attackSec: 0.002,
-        decaySec: 0.15,
-        startFreq: 460,
-        endFreq: 900,
-        step2AtSec: 0,
-        step2Freq: 0,
-        vibratoHz: 25,
-        vibratoDepthHz: 55,
-        pulseMix: 0.70,
-        sawMix: 0.30,
-        triMix: 0,
-        noiseMix: 0,
-        duty: 0.50,
-        quantize50Hz: true,
-        noiseStartHz: 0,
-        noiseEndHz: 0,
-        filterStartHz: 5200,
-        filterEndHz: 3200,
-        filterQ: 0.9,
-        gain: 0.20,
-      });
-      break;
-
-    case 'glide_down':
-      // Crisp 50 Hz-stepped C64 Sawtooth descent (880 -> 580 Hz, 180 ms)
-      state.cooldownUntil.glide_down = now + 0.36;
-      spawnVoice(state, {
-        durationSec: 0.18,
-        attackSec: 0.002,
-        decaySec: 0.15,
-        startFreq: 880,
-        endFreq: 560,
+        startFreq: 1040,
+        endFreq: 420,
         step2AtSec: 0,
         step2Freq: 0,
         vibratoHz: 0,
@@ -320,28 +157,51 @@ export function triggerC64Preset(state: SidSynthState, preset: C64SfxPreset) {
         quantize50Hz: true,
         noiseStartHz: 0,
         noiseEndHz: 0,
-        filterStartHz: 5400,
-        filterEndHz: 2600,
+        filterStartHz: 5600,
+        filterEndHz: 2400,
         filterQ: 0.8,
-        gain: 0.20,
+        gain: 0.26,
+      });
+      spawnVoice(state, {
+        durationSec: 0.042,
+        attackSec: 0.001,
+        decaySec: 0.032,
+        startFreq: 160,
+        endFreq: 70,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0,
+        sawMix: 0,
+        triMix: 0.25,
+        noiseMix: 0.75,
+        duty: 0.5,
+        quantize50Hz: false,
+        noiseStartHz: 4600,
+        noiseEndHz: 1500,
+        filterStartHz: 4600,
+        filterEndHz: 1600,
+        filterQ: 1.4,
+        gain: 0.22,
       });
       break;
 
-    case 'chime':
-      // Crisp 880 -> 660 Hz SID square ping
-      state.cooldownUntil.chime = now + 0.16;
+    case 'platform':
+      // Crisp C64 Starquake 880 -> 445 -> 880 Hz 50% Square blip with strong stepped echo
+      state.cooldownUntil.platform = now + 0.11;
       spawnVoice(state, {
-        durationSec: 0.16,
+        durationSec: 0.11,
         attackSec: 0.001,
-        decaySec: 0.13,
-        startFreq: 880,
-        endFreq: 880,
-        step2AtSec: 0.05,
-        step2Freq: 660,
+        decaySec: 0.085,
+        startFreq: 445,
+        endFreq: 445,
+        step2AtSec: 0.035,
+        step2Freq: 882,
         vibratoHz: 0,
         vibratoDepthHz: 0,
-        pulseMix: 0.85,
-        sawMix: 0.15,
+        pulseMix: 0.90,
+        sawMix: 0.10,
         triMix: 0,
         noiseMix: 0,
         duty: 0.50,
@@ -349,9 +209,149 @@ export function triggerC64Preset(state: SidSynthState, preset: C64SfxPreset) {
         noiseStartHz: 0,
         noiseEndHz: 0,
         filterStartHz: 5400,
+        filterEndHz: 3800,
+        filterQ: 0.8,
+        gain: 0.24,
+      });
+      break;
+
+    case 'footstep':
+      // Tight, punchy bassy SID "blup" footstep (145 -> 65 Hz in ~45 ms) matching C64 longplay
+      state.cooldownUntil.footstep = now + 0.105;
+      spawnVoice(state, {
+        durationSec: 0.055,
+        attackSec: 0.001,
+        decaySec: 0.042,
+        startFreq: 145,
+        endFreq: 65,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.20,
+        sawMix: 0.15,
+        triMix: 0.65,
+        noiseMix: 0,
+        duty: 0.45,
+        quantize50Hz: false,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 720,
+        filterEndHz: 240,
+        filterQ: 1.0,
+        gain: 0.32,
+      });
+      break;
+
+    case 'pickup':
+      // Sparkly 880 Hz -> 1180 Hz bright SID square chime
+      state.cooldownUntil.pickup = now + 0.095;
+      spawnVoice(state, {
+        durationSec: 0.11,
+        attackSec: 0.001,
+        decaySec: 0.09,
+        startFreq: 660,
+        endFreq: 660,
+        step2AtSec: 0.035,
+        step2Freq: 990,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.88,
+        sawMix: 0.12,
+        triMix: 0,
+        noiseMix: 0,
+        duty: 0.50,
+        quantize50Hz: true,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 5800,
+        filterEndHz: 4000,
+        filterQ: 0.8,
+        gain: 0.24,
+      });
+      break;
+
+    case 'hover_up':
+      // Short, restrained 65 ms SID pulse chirp (avoids constant siren spam during movement)
+      state.cooldownUntil.hover_up = now + 0.38;
+      spawnVoice(state, {
+        durationSec: 0.075,
+        attackSec: 0.001,
+        decaySec: 0.06,
+        startFreq: 620,
+        endFreq: 880,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.78,
+        sawMix: 0.22,
+        triMix: 0,
+        noiseMix: 0,
+        duty: 0.50,
+        quantize50Hz: true,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 4800,
         filterEndHz: 3200,
         filterQ: 0.8,
-        gain: 0.22,
+        gain: 0.13,
+      });
+      break;
+
+    case 'glide_down':
+      // Crisp 150 ms C64 Sawtooth descent (880 -> 600 Hz, matching C64 fall/drop cue)
+      state.cooldownUntil.glide_down = now + 0.45;
+      spawnVoice(state, {
+        durationSec: 0.16,
+        attackSec: 0.002,
+        decaySec: 0.13,
+        startFreq: 880,
+        endFreq: 600,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.20,
+        sawMix: 0.80,
+        triMix: 0,
+        noiseMix: 0,
+        duty: 0.50,
+        quantize50Hz: true,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 5200,
+        filterEndHz: 2600,
+        filterQ: 0.8,
+        gain: 0.15,
+      });
+      break;
+
+    case 'chime':
+      // Crisp 880 Hz SID square ping (repeats cleanly through the 135 ms cavern echo!)
+      state.cooldownUntil.chime = now + 0.18;
+      spawnVoice(state, {
+        durationSec: 0.065,
+        attackSec: 0.001,
+        decaySec: 0.05,
+        startFreq: 880,
+        endFreq: 880,
+        step2AtSec: 0,
+        step2Freq: 0,
+        vibratoHz: 0,
+        vibratoDepthHz: 0,
+        pulseMix: 0.90,
+        sawMix: 0.10,
+        triMix: 0,
+        noiseMix: 0,
+        duty: 0.50,
+        quantize50Hz: true,
+        noiseStartHz: 0,
+        noiseEndHz: 0,
+        filterStartHz: 5600,
+        filterEndHz: 3600,
+        filterQ: 0.8,
+        gain: 0.20,
       });
       break;
 
@@ -776,25 +776,26 @@ export class C64AudioEngine {
     sidLowpass.Q.value = 0.7;
 
     const dryGain = context.createGain();
-    dryGain.gain.value = 0.88;
+    dryGain.gain.value = 0.84;
 
+    // Prominent 135 ms stepped C64 Starquake echo ("PING! ... ping! ... ping!")
     const delayL = context.createDelay(0.5);
-    delayL.delayTime.value = 0.10;
+    delayL.delayTime.value = 0.135;
     const delayR = context.createDelay(0.5);
-    delayR.delayTime.value = 0.155;
+    delayR.delayTime.value = 0.175;
     const echoLpL = context.createBiquadFilter();
     echoLpL.type = 'lowpass';
-    echoLpL.frequency.value = 2400;
+    echoLpL.frequency.value = 3800;
     const echoLpR = context.createBiquadFilter();
     echoLpR.type = 'lowpass';
-    echoLpR.frequency.value = 2100;
+    echoLpR.frequency.value = 3500;
     const echoFbL = context.createGain();
-    echoFbL.gain.value = 0.12;
+    echoFbL.gain.value = 0.28;
     const echoFbR = context.createGain();
-    echoFbR.gain.value = 0.12;
+    echoFbR.gain.value = 0.26;
     const echoMerger = context.createChannelMerger(2);
     const echoWet = context.createGain();
-    echoWet.gain.value = 0.14;
+    echoWet.gain.value = 0.34;
 
     const compressor = context.createDynamicsCompressor();
     compressor.threshold.value = -10;
